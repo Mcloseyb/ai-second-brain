@@ -13,7 +13,7 @@
 | 阶段 | 状态 | 完成度 | 开始时间 | 完成时间 |
 |------|------|--------|---------|---------|
 | P1 基础通信 | ✅ 已完成 | 12/12 | 2026-07-30 | 2026-07-30 |
-| P2 笔记系统 | ⏳ 未开始 | 0/10 | - | - |
+| P2 笔记系统 | ✅ 已完成 | 10/10 | 2026-07-30 | 2026-07-30 |
 | P3 RAG引擎 | ⏳ 未开始 | 0/12 | - | - |
 | P4 工具调用 | ⏳ 未开始 | 0/9 | - | - |
 | P5 多Agent | ⏳ 未开始 | 0/10 | - | - |
@@ -60,24 +60,24 @@
 > **可演示**: 创建笔记 → 编辑 → 打标签 → 搜索 → 删除
 
 ### 2.1 数据库模型
-- [ ] 2.1.1 实现 Note + Tag 模型（SQLAlchemy ORM）
-- [ ] 2.1.2 配置 SQLAlchemy 引擎 + Session 管理
-- [ ] 2.1.3 初始化 Alembic + 生成首次迁移脚本
-- [ ] 2.1.4 编写 scripts/init_db.py（创建所有表）
+- [x] 2.1.1 实现 Note + Tag 模型（SQLAlchemy ORM）
+- [x] 2.1.2 配置 SQLAlchemy 引擎 + Session 管理
+- [x] 2.1.3 初始化 Alembic + 生成首次迁移脚本
+- [x] 2.1.4 编写 scripts/init_db.py（创建所有表）
 
 ### 2.2 笔记 API
-- [ ] 2.2.1 实现 api/notes.py — CRUD 完整接口（5 个端点）
-- [ ] 2.2.2 实现 services/note_service.py（业务逻辑层）
-- [ ] 2.2.3 定义 Pydantic Schema（NoteCreate/NoteUpdate/NoteResponse）
-- [ ] 2.2.4 实现分页 + 搜索 + 按标签筛选
-- [ ] 2.2.5 实现 api/tags.py（标签列表 + 创建）
+- [x] 2.2.1 实现 api/notes.py — CRUD 完整接口（5 个端点）
+- [x] 2.2.2 实现 services/note_service.py（业务逻辑层）
+- [x] 2.2.3 定义 Pydantic Schema（NoteCreate/NoteUpdate/NoteResponse）
+- [x] 2.2.4 实现分页 + 搜索 + 按标签筛选
+- [x] 2.2.5 实现 api/tags.py（标签列表 + 创建）
 
 ### 2.3 桌面端 — 笔记页面
-- [ ] 2.3.1 实现 pages/notes_page.py（左右分栏：目录树 + 编辑器）
-- [ ] 2.3.2 实现 widgets/note_tree.py（笔记树形列表，支持文件夹分组）
-- [ ] 2.3.3 实现 widgets/markdown_editor.py（基础编辑 + 语法高亮）
-- [ ] 2.3.4 实现 Ctrl+S 自动保存 + 保存状态提示
-- [ ] 2.3.5 对接笔记 API（创建/读取/更新/删除）
+- [x] 2.3.1 实现 pages/notes_page.py（左右分栏：目录树 + 编辑器）
+- [x] 2.3.2 实现 widgets/note_tree.py（笔记树形列表，支持文件夹分组）
+- [x] 2.3.3 实现 widgets/markdown_editor.py（基础编辑 + 语法高亮）
+- [x] 2.3.4 实现 Ctrl+S 自动保存 + 保存状态提示
+- [x] 2.3.5 对接笔记 API（创建/读取/更新/删除）
 
 ---
 
