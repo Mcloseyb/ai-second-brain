@@ -1,234 +1,205 @@
 # AI Second Brain — 任务跟踪清单
 
 > **状态说明**  
-> `[ ]` 待办  
-> `[~]` 进行中  
-> `[x]` 已完成  
-> `[!]` 遇到阻塞  
+> `[ ]` 待办 `[~]` 进行中 `[x]` 已完成 `[!]` 阻塞  
+> **每轮对话结束时更新本文件**
 
 ---
 
-## 📊 整体进度
+## 整体进度
 
-| 阶段 | 状态 | 完成度 | 开始时间 | 完成时间 |
-|------|------|--------|---------|---------|
-| P1 基础通信 | ✅ 已完成 | 12/12 | 2026-07-30 | 2026-07-30 |
-| P2 笔记系统 | ✅ 已完成 | 10/10 | 2026-07-30 | 2026-07-30 |
-| P3 RAG引擎 | ⏳ 未开始 | 0/12 | - | - |
-| P4 工具调用 | ⏳ 未开始 | 0/9 | - | - |
-| P5 多Agent | ⏳ 未开始 | 0/10 | - | - |
-| P6 UI打磨 | ⏳ 未开始 | 0/10 | - | - |
-| P7 知识图谱 | ⏳ 未开始 | 0/6 | - | - |
-| P8 打包发布 | ⏳ 未开始 | 0/8 | - | - |
+| 阶段 | 主题 | 状态 | 完成度 | 核心交付 |
+|------|------|------|--------|---------|
+| P1 | 基础通信 | ✅ | 12/12 | SSE流式对话 |
+| P2 | 笔记系统 | ✅ | 10/10 | CRUD + 编辑器 |
+| **P3** | **RAG 笔记检索** | **⏳ 当前** | **0/10** | 语义搜索自己的笔记 |
+| P4 | AI 自动标签 | ⏳ | 0/8 | Function Calling Agent |
+| P5 | 智能双向链接 | ⏳ | 0/8 | 自动发现关联笔记 |
+| P6 | AI 出题自测 | ⏳ | 0/7 | 根据笔记生成题目 |
+| P7 | 真实知识图谱 | ⏳ | 0/6 | 标签+语义双驱图谱 |
+| P8 | 知识回顾总结 | ⏳ | 0/5 | 周报 + 学习路径 |
+| P9 | 打磨打包 | ⏳ | 0/8 | .exe + GitHub Release |
 
----
-
-## P1 — 基础通信（预计 3-4 天）
-
-> **目标**: FastAPI 后端能对话，PySide6 桌面壳能显示 AI 回复  
-> **可演示**: 打开桌面窗口，输入文字，看到 AI 流式回复
-
-### 1.1 项目初始化
-- [x] 1.1.1 创建完整目录结构（backend/ desktop/ docs/ data/ scripts/）
-- [x] 1.1.2 编写 backend/requirements.txt
-- [x] 1.1.3 编写 desktop/requirements.txt
-- [x] 1.1.4 创建 .env.example + backend/app/config.py（环境变量管理）
-- [x] 1.1.5 创建 .gitignore（排除 data/ .env __pycache__/ 等）
-- [x] 1.1.6 `git init` + 首次 commit
-
-### 1.2 后端 — 基础对话 API
-- [x] 1.2.1 创建 backend/app/main.py（FastAPI 入口 + CORS + 生命周期）
-- [x] 1.2.2 实现 backend/app/core/llm.py（OpenAI SDK 封装 DeepSeek 调用）
-- [x] 1.2.3 实现 backend/app/core/memory.py（滑动窗口记忆，保留最近 10 轮）
-- [x] 1.2.4 实现 backend/app/api/chat.py — `POST /api/chat`（SSE 流式输出）
-- [x] 1.2.5 创建 Message + Conversation 数据模型
-- [x] 1.2.6 用 curl 测试接口：确认流式输出正常
-
-### 1.3 桌面端 — 最简窗口
-- [x] 1.3.1 创建 desktop/main.py（启动后端子进程 + QApplication）
-- [x] 1.3.2 创建 desktop/main_window.py（主窗口框架 + QTabWidget）
-- [x] 1.3.3 实现 desktop/services/api_client.py（httpx.AsyncClient 封装）
-- [x] 1.3.4 实现 desktop/services/sse_client.py（SSE 流式解析 + 信号回调）
-- [x] 1.3.5 实现 desktop/pages/chat_page.py（输入框 + 发送按钮 + 消息显示区）
-- [ ] 1.3.6 端到端测试：桌面输入 → 后端 API → AI 回复 → 桌面显示
+**暂存池（做完 P9 后再考虑）**: 知识缺口发现 / 学习路径时间线 / 概念成熟度追踪 / AI 学习伙伴
 
 ---
 
-## P2 — 笔记系统（预计 3-4 天）
+## P1 — 基础通信 ✅
 
-> **目标**: 完整的笔记 CRUD，SQLite 数据库，桌面端富文本编辑  
-> **可演示**: 创建笔记 → 编辑 → 打标签 → 搜索 → 删除
+<details>
+<summary>12/12 已完成</summary>
 
-### 2.1 数据库模型
-- [x] 2.1.1 实现 Note + Tag 模型（SQLAlchemy ORM）
-- [x] 2.1.2 配置 SQLAlchemy 引擎 + Session 管理
-- [x] 2.1.3 初始化 Alembic + 生成首次迁移脚本
-- [x] 2.1.4 编写 scripts/init_db.py（创建所有表）
-
-### 2.2 笔记 API
-- [x] 2.2.1 实现 api/notes.py — CRUD 完整接口（5 个端点）
-- [x] 2.2.2 实现 services/note_service.py（业务逻辑层）
-- [x] 2.2.3 定义 Pydantic Schema（NoteCreate/NoteUpdate/NoteResponse）
-- [x] 2.2.4 实现分页 + 搜索 + 按标签筛选
-- [x] 2.2.5 实现 api/tags.py（标签列表 + 创建）
-
-### 2.3 桌面端 — 笔记页面
-- [x] 2.3.1 实现 pages/notes_page.py（左右分栏：目录树 + 编辑器）
-- [x] 2.3.2 实现 widgets/note_tree.py（笔记树形列表，支持文件夹分组）
-- [x] 2.3.3 实现 widgets/markdown_editor.py（基础编辑 + 语法高亮）
-- [x] 2.3.4 实现 Ctrl+S 自动保存 + 保存状态提示
-- [x] 2.3.5 对接笔记 API（创建/读取/更新/删除）
+- [x] 创建目录结构 / requirements / .gitignore
+- [x] FastAPI 入口 + CORS
+- [x] LLM 调用封装 (DeepSeek SSE + 重试)
+- [x] 滑动窗口对话记忆
+- [x] POST /api/chat SSE 流式
+- [x] Message + Conversation 模型
+- [x] PySide6 桌面窗口 + qasync
+- [x] httpx API 客户端 + SSE 解析
+- [x] 聊天页面（深色气泡流式显示）
+- [x] curl 测试通过
+- [x] Notion 风格侧边栏
+- [x] GitHub 推送
+</details>
 
 ---
 
-## P3 — RAG 引擎（预计 4-5 天）
+## P2 — 笔记系统 ✅
 
-> **目标**: 上传文档 → 切片 → 向量化 → ChromaDB → 智能问答  
-> **可演示**: 拖入三份 PDF，基于文档提问，AI 回答并标注来源
+<details>
+<summary>10/10 已完成</summary>
 
-### 3.1 文档处理管道
-- [ ] 3.1.1 实现 core/document_parser.py（PDF→PyMuPDF, DOCX→python-docx, MD/TXT）
-- [ ] 3.1.2 实现文本清洗（去多余空白、保留段落结构）
-- [ ] 3.1.3 实现 core/rag_engine.py — 语义切片（RecursiveCharacterTextSplitter）
-- [ ] 3.1.4 实现 core/embedding.py（DeepSeek Embedding API + 批量处理 + 重试）
-- [ ] 3.1.5 集成 ChromaDB（collection 管理 + 持久化存储）
-
-### 3.2 RAG API
-- [ ] 3.2.1 实现 api/documents.py（上传/列表/删除文档）
-- [ ] 3.2.2 实现 api/rag.py — `POST /api/rag/query` SSE 流式
-- [ ] 3.2.3 实现混合检索（语义向量 0.7 + BM25 0.3 + RRF 融合）
-- [ ] 3.2.4 实现 LLM 重排序（对检索结果做相关性过滤）
-- [ ] 3.2.5 实现 services/rag_service.py（RAG 业务编排）
-- [ ] 3.2.6 在响应中标注引用来源（doc_name + page + chunk_text）
-
-### 3.3 桌面端 — 知识问答页面
-- [ ] 3.3.1 升级 pages/chat_page.py → 知识问答模式
-- [ ] 3.3.2 添加文档管理区（拖拽上传 + 文档列表 + 删除）
-- [ ] 3.3.3 在对话气泡中显示引用来源标注
-- [ ] 3.3.4 添加可信度指示器（绿色=高，黄色=中，红色=低）
+- [x] Note + Tag 模型（多对多）
+- [x] SQLAlchemy 引擎 (已在 P1 做)
+- [x] 建表（init_db 导入全部模型）
+- [x] POST/GET/PUT/DELETE /api/notes
+- [x] 分页 + 搜索 + 标签筛选
+- [x] GET/POST /api/tags
+- [x] note_service.py 业务层
+- [x] 笔记页面（左右分栏）
+- [x] 笔记列表树 + Markdown 编辑器
+- [x] Ctrl+S 保存 + 新建笔记
+</details>
 
 ---
 
-## P4 — 工具调用（预计 3-4 天）
+## P3 — RAG 笔记语义检索（预计 3-4 天）
 
-> **目标**: Agent 能自主决定调用哪个工具解决问题  
-> **可演示**: 问"搜索Python最新特性"→ Agent 调搜索 → 返回结果 → 总结
+> **你写了很多笔记 → 每篇自动向量化 → 输入"关于 attention 的"检索最相关笔记**
 
-### 4.1 工具定义
-- [ ] 4.1.1 实现 tools/web_search.py（DuckDuckGo 搜索）
-- [ ] 4.1.2 实现 tools/calculator.py（安全数学表达式求值）
-- [ ] 4.1.3 实现 tools/note_search.py（本地笔记全文搜索）
-- [ ] 4.1.4 定义工具注册机制（Tool Registry）
+### 3.1 后端 — Embedding + 向量存储
+- [ ] 3.1.1 实现 core/embedding.py（DeepSeek Embedding API 封装）
+- [ ] 3.1.2 实现 core/rag_engine.py（笔记文本向量化 + ChromaDB 存储）
+- [ ] 3.1.3 笔记保存时自动同步到向量库（note_service 中触发）
+- [ ] 3.1.4 笔记删除时同步清理向量库
+- [ ] 3.1.5 启动时把已有笔记全量索引一遍
 
-### 4.2 ReAct Agent
-- [ ] 4.2.1 实现 agents/base.py — ReAct 循环（Thought→Action→Observation→...→Answer）
-- [ ] 4.2.2 实现 api/chat.py — `POST /api/chat/tool` 工具调用对话（SSE）
-- [ ] 4.2.3 实现工具选择日志 + 调用过程可视化
-- [ ] 4.2.4 实现错误处理（工具调用失败 → 重试 → 降级）
+### 3.2 API
+- [ ] 3.2.1 POST /api/notes/search — 语义搜索笔记（返回 Top-K + 相似度分数）
+- [ ] 3.2.2 搜索时显示摘录片段（匹配到的文本高亮）
+- [ ] 3.2.3 实现混合检索（语义 0.7 + BM25 关键词 0.3）
 
-### 4.3 桌面端适配
-- [ ] 4.3.1 聊天页面增加工具调用状态显示（"🔍 正在搜索..."）
-- [ ] 4.3.2 Agent 思考过程的 Thought → Action → Observation 可视化
-- [ ] 4.3.3 工具调用结果的 Markdown 美化展示
+### 3.3 桌面端
+- [ ] 3.3.1 Chat 页面接入笔记搜索 — 问"我的笔记里有关于XX的吗"
+- [ ] 3.3.2 搜索结果展示（笔记标题 + 匹配片段 + 相似度）
 
 ---
 
-## P5 — 多 Agent 协作（预计 4-5 天）
+## P4 — AI 自动标签（预计 3-4 天）
 
-> **目标**: 4 个 Agent 协同完成深度研究报告  
-> **可演示**: 输入主题 → 4 个 Agent 依次工作 → 实时查看进度 → 输出完整报告
+> **写完笔记 Ctrl+S → AI 自动分析 → 推荐 3-5 个标签 → 一键采纳**  
+> **Agent 核心流程: 接收分析任务 → 调用 Embedding 工具 → 对比已有标签 → 输出推荐**
 
-### 5.1 Agent 定义
-- [ ] 5.1.1 实现 agents/retriever.py（检索 Agent + System Prompt）
-- [ ] 5.1.2 实现 agents/analyst.py（分析 Agent + System Prompt）
-- [ ] 5.1.3 实现 agents/writer.py（写作 Agent + System Prompt）
-- [ ] 5.1.4 实现 agents/reviewer.py（审核 Agent + System Prompt）
-- [ ] 5.1.5 每个 Agent 的独立 System Prompt 模板文件
+### 4.1 Function Calling 基础设施
+- [ ] 4.1.1 实现 agents/base.py — ReAct Agent 基类
+- [ ] 4.1.2 实现工具注册机制 ToolRegistry
+- [ ] 4.1.3 定义标签推荐工具 suggest_tags(content, existing_tags)
+- [ ] 4.1.4 实现标签推荐 System Prompt
 
-### 5.2 LangGraph 编排
-- [ ] 5.2.1 实现 agents/orchestrator.py — StateGraph 工作流定义
-- [ ] 5.2.2 实现条件分支（审核通过 → 结束 / 不通过 → 回到写作 / 3次失败 → 降级）
-- [ ] 5.2.3 实现 SSE 实时推送每个 Agent 的状态变化
-- [ ] 5.2.4 编写编排器单元测试
+### 4.2 API
+- [ ] 4.2.1 POST /api/notes/{id}/auto-tag — 返回推荐标签列表
+- [ ] 4.2.2 POST /api/notes/{id}/tags — 批量应用标签
 
-### 5.3 API + 桌面端
-- [ ] 5.3.1 实现 api/research.py — `POST /api/research/start` SSE
-- [ ] 5.3.2 实现 pages/research_page.py（研究主题输入 + 进度 + 报告显示）
-- [ ] 5.3.3 实现 widgets/agent_status.py（Agent 状态可视化组件 — 4列进度条）
-- [ ] 5.3.4 实现研究结果导出为 Markdown 文件
+### 4.3 桌面端
+- [ ] 4.3.1 保存笔记后自动弹窗"AI 推荐了 3 个标签"
+- [ ] 4.3.2 一键采纳 / 手动调整 / 忽略
 
 ---
 
-## P6 — UI 打磨（预计 3-4 天）
+## P5 — 智能双向链接（预计 3-4 天）
 
-> **目标**: 专业的桌面应用视觉和交互体验  
-> **可演示**: 美观的界面、快捷键、主题切换、流畅操作
+> **打开一篇笔记 → 右侧出现 "Related Notes" → 基于语义相似度自动发现**
 
-### 6.1 样式系统
-- [ ] 6.1.1 编写 resources/styles/theme.qss（全局 QSS 主题）
-- [ ] 6.1.2 实现深色/浅色主题切换
-- [ ] 6.1.3 统一字体、颜色、间距规范
-- [ ] 6.1.4 整理图标资源
+### 5.1 后端
+- [ ] 5.1.1 实现笔记相似度计算（Embedding 余弦相似度）
+- [ ] 5.1.2 GET /api/notes/{id}/related — 返回最相关的 Top-5 笔记
+- [ ] 5.1.3 正文内自动检测其他笔记标题 → 建议生成超链接
+- [ ] 5.1.4 记录笔记间的引用关系（note_links 表: source_id → target_id）
 
-### 6.2 交互优化
-- [ ] 6.2.1 实现全局快捷键系统（Ctrl+N/K/S 等）
-- [ ] 6.2.2 QStatusBar 状态提示（后端连接状态、保存状态）
-- [ ] 6.2.3 加载动画（QMovie / 自定义 spinner）
-- [ ] 6.2.4 错误提示对话框（网络错误、API 错误、文件错误）
-
-### 6.3 编辑器增强
-- [ ] 6.3.1 Markdown 工具栏（粗体/斜体/标题/列表/代码块/链接）
-- [ ] 6.3.2 代码块语法高亮
-- [ ] 6.3.3 图片粘贴支持（本地保存 + 引用路径）
-- [ ] 6.3.4 自动保存草稿 + 异常退出恢复
+### 5.2 桌面端
+- [ ] 5.2.1 笔记页右侧增加 "Related Notes" 面板
+- [ ] 5.2.2 打开笔记时自动加载关联列表
+- [ ] 5.2.3 笔记正文中自动高亮已链接的笔记标题
+- [ ] 5.2.4 被引用笔记底部显示 "Linked from: X篇笔记"
 
 ---
 
-## P7 — 知识图谱（预计 2-3 天）
+## P6 — AI 出题自测（预计 3-4 天）
 
-> **目标**: 可视化展示知识结构  
-> **可演示**: 看板页面展示统计卡片 + 知识图谱力导向图
+> **选中几篇笔记 → "出题" → AI 生成 5 道选择题 + 2 道简答题**  
+> **答完 → AI 批改 → 告诉哪里掌握得好、哪里需要复习**
 
-### 7.1 后端 — 图谱数据
-- [ ] 7.1.1 实现 api/dashboard.py — `GET /api/dashboard/stats`（统计数据）
-- [ ] 7.1.2 实现 api/dashboard.py — `GET /api/dashboard/graph`（图谱数据 JSON）
-- [ ] 7.1.3 计算标签共现关系 + 节点权重
+### 6.1 后端
+- [ ] 6.1.1 POST /api/quiz/generate — 基于笔记内容生成题目
+- [ ] 6.1.2 POST /api/quiz/grade — 批改答案 + 解析
+- [ ] 6.1.3 Prompt 模板设计（Few-shot 生成题目）
+- [ ] 6.1.4 题目 + 成绩存储到数据库
 
-### 7.2 桌面端 — 可视化
-- [ ] 7.2.1 实现 widgets/knowledge_graph.py（PySide6-WebEngine + ECharts 力导向图）
-- [ ] 7.2.2 实现 pages/dashboard_page.py（统计卡片 + 图谱 + 热门标签）
-- [ ] 7.2.3 实现点击图谱节点 → 跳转相关笔记列表
-- [ ] 7.2.4 图谱交互（缩放/拖拽/高亮关联）
-
----
-
-## P8 — 打包发布（预计 2-3 天）
-
-> **目标**: 生成可独立运行的 .exe，发布到 GitHub  
-> **可演示**: 别人电脑上双击 .exe 就能用
-
-### 8.1 打包
-- [ ] 8.1.1 编写 scripts/build_exe.py（PyInstaller 配置）
-- [ ] 8.1.2 编写 .spec 文件（精确控制打包内容）
-- [ ] 8.1.3 在干净 Windows 环境测试 .exe 运行
-- [ ] 8.1.4 解决 PyInstaller 常见问题（路径、动态库、chromadb）
-
-### 8.2 测试
-- [ ] 8.2.1 编写后端 API 单元测试（pytest）（覆盖核心接口）
-- [ ] 8.2.2 编写 RAG 管道测试
-- [ ] 8.2.3 编写 Agent 编排测试
-- [ ] 8.2.4 桌面端手动测试清单 + Bug 修复
-
-### 8.3 发布
-- [ ] 8.3.1 编写 README.md（功能介绍 + 安装 + 截图/GIF）
-- [ ] 8.3.2 录制演示视频（展示 4 个页面的完整功能）
-- [ ] 8.3.3 创建 GitHub 仓库 + Push 代码
-- [ ] 8.3.4 编写简历描述 + 面试问答准备文档
+### 6.2 桌面端
+- [ ] 6.2.1 笔记页面 "Generate Quiz" 按钮
+- [ ] 6.2.2 答题界面（选择题 + 简答）
+- [ ] 6.2.3 批改结果展示（对错 + 解析 + 复习建议）
 
 ---
 
-## 📝 更新记录
+## P7 — 真实知识图谱（预计 2-3 天）
 
-| 日期 | 更新内容 |
-|------|---------|
-| 2026-07-30 | 初始创建，规划 8 个阶段 89 个任务 |
+> **用真实笔记数据驱动图谱（不再用假数据）**  
+> **标签共现 = 连线 / 语义相似 = 连线粗细**
+
+### 7.1 后端
+- [ ] 7.1.1 GET /api/dashboard/stats — 统计数据（笔记数/标签数/关联数）
+- [ ] 7.1.2 GET /api/dashboard/graph — 图谱数据（nodes: 笔记标题, edges: 标签共现/语义相似）
+- [ ] 7.1.3 计算节点权重（笔记字数/引用次数）
+
+### 7.2 桌面端
+- [ ] 7.2.1 graph_page 接入真实 API 数据
+- [ ] 7.2.2 点击图谱节点 → 打开对应笔记
+- [ ] 7.2.3 图谱筛选（按标签/时间/关联强度）
+
+---
+
+## P8 — 知识回顾总结（预计 2-3 天）
+
+> **"本周你学了什么" → AI 分析本周笔记 → 生成小结**  
+> **时间线视图 → 看到自己的学习成长轨迹**
+
+### 8.1 后端
+- [ ] 8.1.1 POST /api/summary/weekly — 本周知识小结
+- [ ] 8.1.2 按标签聚类 → 按时间排序 → AI 生成总结
+- [ ] 8.1.3 GET /api/timeline — 学习时间线数据
+
+### 8.2 桌面端
+- [ ] 8.2.1 Dashboard 页面替换为真实统计
+- [ ] 8.2.2 本周小结卡片 + 学习时间线
+
+---
+
+## P9 — 打磨 + 打包（预计 2-3 天）
+
+- [ ] 9.1 全局 UI 细节打磨（间距/动画/反馈）
+- [ ] 9.2 PyInstaller 打包成 .exe
+- [ ] 9.3 单元测试覆盖核心 API
+- [ ] 9.4 README + 演示 GIF + 简历描述
+- [ ] 9.5 GitHub Release v1.0.0
+
+---
+
+## 暂存池
+
+| 功能 | 说明 |
+|------|------|
+| 知识缺口发现 | AI 分析薄弱环节，推荐学习方向 |
+| 学习路径时间线 | 可视化学习成长轨迹 |
+| 概念成熟度追踪 | 每个标签有掌握度分数 |
+| AI 学习伙伴 | 对话式复习提问 + 纠正补充 |
+
+---
+
+## 更新记录
+
+| 日期 | 更新 |
+|------|------|
+| 2026-07-30 | 初始创建 |
+| 2026-07-30 晚 | 方向调整：从"多Agent写报告"改为"知识互联笔记系统" |
