@@ -12,7 +12,7 @@
 
 | 阶段 | 状态 | 完成度 | 开始时间 | 完成时间 |
 |------|------|--------|---------|---------|
-| P1 基础通信 | 🔄 进行中 | 10/12 | 2026-07-30 | - |
+| P1 基础通信 | ✅ 已完成 | 12/12 | 2026-07-30 | 2026-07-30 |
 | P2 笔记系统 | ⏳ 未开始 | 0/10 | - | - |
 | P3 RAG引擎 | ⏳ 未开始 | 0/12 | - | - |
 | P4 工具调用 | ⏳ 未开始 | 0/9 | - | - |
@@ -45,11 +45,11 @@
 - [x] 1.2.6 用 curl 测试接口：确认流式输出正常
 
 ### 1.3 桌面端 — 最简窗口
-- [ ] 1.3.1 创建 desktop/main.py（启动后端子进程 + QApplication）
-- [ ] 1.3.2 创建 desktop/main_window.py（主窗口框架 + QTabWidget）
-- [ ] 1.3.3 实现 desktop/services/api_client.py（httpx.AsyncClient 封装）
-- [ ] 1.3.4 实现 desktop/services/sse_client.py（SSE 流式解析 + 信号回调）
-- [ ] 1.3.5 实现 desktop/pages/chat_page.py（输入框 + 发送按钮 + 消息显示区）
+- [x] 1.3.1 创建 desktop/main.py（启动后端子进程 + QApplication）
+- [x] 1.3.2 创建 desktop/main_window.py（主窗口框架 + QTabWidget）
+- [x] 1.3.3 实现 desktop/services/api_client.py（httpx.AsyncClient 封装）
+- [x] 1.3.4 实现 desktop/services/sse_client.py（SSE 流式解析 + 信号回调）
+- [x] 1.3.5 实现 desktop/pages/chat_page.py（输入框 + 发送按钮 + 消息显示区）
 - [ ] 1.3.6 端到端测试：桌面输入 → 后端 API → AI 回复 → 桌面显示
 
 ---
