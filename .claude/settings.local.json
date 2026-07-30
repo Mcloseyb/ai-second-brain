@@ -7,7 +7,20 @@
       "Bash(pnpm --version)",
       "Bash(docker --version)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import struct; print\\(f'Architecture: {struct.calcsize\\(\\\\\"P\\\\\"\\) * 8}-bit'\\)\")",
+      "Bash(where python *)",
+      "Bash(C:/Users/HP/AppData/Local/Programs/Python/Python312/python.exe --version)",
+      "Bash(C:/Users/HP/AppData/Local/Programs/Python/Python312/python.exe -c \"import struct; print\\(f'{struct.calcsize\\(\\\\\"P\\\\\"\\)*8}-bit'\\)\")",
+      "Bash(C:/Users/HP/AppData/Local/Programs/Python/Python312/python.exe -m venv .venv)",
+      "Bash(.venv/Scripts/python.exe *)",
+      "Bash(.venv/Scripts/pip.exe install *)",
+      "Bash(.venv/Scripts/uvicorn.exe app.main:app --app-dir backend --host 127.0.0.1 --port 8000)",
+      "Bash(curl -s http://127.0.0.1:8000/)",
+      "Bash(curl -s -N -X POST http://127.0.0.1:8000/api/chat -H 'Content-Type: application/json' -d '{\"message\": \"用一句话介绍什么是AI Agent\"}')",
+      "Bash(curl *)"
     ]
   }
 }

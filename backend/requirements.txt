@@ -1,0 +1,35 @@
+# ============================================
+# AI Second Brain — 后端依赖 (Python 3.12)
+# ============================================
+
+# --- Web Framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18
+
+# --- Database ---
+sqlalchemy==2.0.36
+alembic==1.14.0
+
+# --- AI / LLM ---
+openai==1.59.9
+langchain==0.3.13
+langchain-openai==0.2.14
+langgraph==0.2.56
+chromadb==0.5.23
+tiktoken==0.8.0
+
+# --- Document Parsing ---
+PyMuPDF==1.25.0
+python-docx==1.1.2
+
+# --- Utilities ---
+python-dotenv==1.0.1
+pydantic==2.10.4
+pydantic-settings==2.6.1
+httpx==0.28.1
+rank-bm25==0.2.2
+
+# --- Testing ---
+pytest==8.3.4
+pytest-asyncio==0.25.0

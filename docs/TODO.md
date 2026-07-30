@@ -29,12 +29,12 @@
 > **可演示**: 打开桌面窗口，输入文字，看到 AI 流式回复
 
 ### 1.1 项目初始化
-- [ ] 1.1.1 创建完整目录结构（backend/ desktop/ docs/ data/ scripts/）
+- [x] 1.1.1 创建完整目录结构（backend/ desktop/ docs/ data/ scripts/）
 - [ ] 1.1.2 编写 backend/requirements.txt
 - [ ] 1.1.3 编写 desktop/requirements.txt
-- [ ] 1.1.4 创建 .env.example + backend/app/config.py（环境变量管理）
-- [ ] 1.1.5 创建 .gitignore（排除 data/ .env __pycache__/ 等）
-- [ ] 1.1.6 `git init` + 首次 commit
+- [x] 1.1.4 创建 .env.example + backend/app/config.py（环境变量管理）
+- [x] 1.1.5 创建 .gitignore（排除 data/ .env __pycache__/ 等）
+- [x] 1.1.6 `git init` + 首次 commit
 
 ### 1.2 后端 — 基础对话 API
 - [ ] 1.2.1 创建 backend/app/main.py（FastAPI 入口 + CORS + 生命周期）
