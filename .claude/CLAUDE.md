@@ -22,6 +22,49 @@
 
 ---
 
+## 0.5 会话恢复（每次打开 Claude Code 先读这里）
+
+### 当前状态
+
+| 项目 | 值 |
+|------|-----|
+| 已完成阶段 | P1 基础通信 ✅, P2 笔记系统 ✅ |
+| 当前阶段 | **P3 — RAG 笔记语义检索** |
+| 当前任务 | 即将开始 P3.1: Embedding + ChromaDB |
+| GitHub | https://github.com/Mcloseyb/ai-second-brain |
+| 上次会话 | 2026-07-30，完成路线图重规划 |
+
+### 恢复工作命令
+
+```bash
+cd H:\agent
+.venv\Scripts\activate
+
+# 如果后端没跑，启动它:
+uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+
+# 桌面端:
+python desktop\main.py
+```
+
+### 恢复步骤
+
+1. **读取** `docs/TODO.md` — P3 第一个未勾选的任务就是当前任务
+2. **读取** `docs/PROJECT_PLAN.md` — 第 9 节确认技术方案
+3. **开始写代码**
+
+### 路线速览
+
+```
+P1 ✅  基础通信     P2 ✅  笔记系统
+P3 ⏳  RAG 笔记检索  P4 ⏳  AI 自动标签
+P5 ⏳  智能双向链接  P6 ⏳  AI 出题自测
+P7 ⏳  知识图谱     P8 ⏳  知识回顾
+P9 ⏳  打包 .exe
+```
+
+---
+
 ## 0. 必读文档（每次会话必须加载）
 
 在每次对话开始时，**必须先读取以下文档以获取最新状态**：
