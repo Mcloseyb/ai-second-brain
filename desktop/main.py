@@ -38,6 +38,18 @@ logging.basicConfig(
 logger = logging.getLogger("desktop")
 
 
+def _load_stylesheet(app):
+    """加载全局 QSS 主题样式"""
+    qss_path = PROJECT_ROOT / "desktop" / "resources" / "styles" / "theme.qss"
+    if qss_path.exists():
+        with open(qss_path, "r", encoding="utf-8") as f:
+            qss = f.read()
+        app.setStyleSheet(qss)
+        logger.info(f"Loaded stylesheet: {qss_path}")
+    else:
+        logger.warning(f"Stylesheet not found: {qss_path}")
+
+
 def start_backend() -> subprocess.Popen | None:
     """启动后端子进程"""
     backend_dir = PROJECT_ROOT / "backend"
@@ -107,6 +119,13 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("AI Second Brain")
     app.setOrganizationName("AI-Second-Brain")
+
+    # 加载全局 QSS 样式表
+    _load_stylesheet(app)
+
+    # 注册自定义 CSS 属性（Qt 的 property selector 支持）
+    # 允许 QSS 中使用 cssClass 选择器，如 QPushButton[cssClass="primary"]
+    # PySide6 默认支持动态属性选择器，无需额外配置
 
     # 创建主窗口
     from main_window import MainWindow

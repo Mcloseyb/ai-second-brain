@@ -1,103 +1,164 @@
 """
-主窗口
-------
-QTabWidget 包含 4 个页面:
-  1. 智能笔记 (NotesPage)    — P2 实现
-  2. 知识问答 (ChatPage)     — P1 实现
-  3. 深度研究 (ResearchPage)  — P5 实现
-  4. 个人看板 (DashboardPage) — P7 实现
-
-布局:
-┌─────────────────────────────────────────────┐
-│  🧠 AI Second Brain              ─ □ ×      │
-├─────────────────────────────────────────────┤
-│  [📝 智能笔记] [💬 知识问答] [🔬 深度研究] [📊 看板] │
-├─────────────────────────────────────────────┤
-│                                               │
-│              当前页面的内容区域                  │
-│                                               │
-├─────────────────────────────────────────────┤
-│  🟢 后端运行中  |  DeepSeek API 已连接       │
-└─────────────────────────────────────────────┘
+主窗口 — Notion 风格布局
+------------------------
+┌───────────┬──────────────────────────────────────┐
+│ Sidebar   │  Content Area (QStackedWidget)        │
+│ (240px)   │                                       │
+│           │  Pages:                               │
+│ Workspace │  - Chat (P1 done)                     │
+│ Switcher  │  - Notes (P2)                         │
+│           │  - Graph (P1 done, sample data)       │
+│ Search    │  - Dashboard (P7)                     │
+│           │                                       │
+│ NAV       │                                       │
+│ - Chat    │                                       │
+│ - Notes   │                                       │
+│ - Graph   │                                       │
+│ - Dash    │                                       │
+│           │                                       │
+│ User      │                                       │
+│ Settings  │                                       │
+└───────────┴──────────────────────────────────────┘
 """
 
+import asyncio
 import logging
 
 from PySide6.QtWidgets import (
-    QMainWindow, QTabWidget, QStatusBar, QLabel, QWidget, QVBoxLayout,
+    QMainWindow, QWidget, QHBoxLayout, QStackedWidget,
+    QStatusBar, QLabel,
 )
 from PySide6.QtCore import Qt, QTimer
 
+from widgets.sidebar import Sidebar
 from pages.chat_page import ChatPage
+from pages.notes_page import NotesPage
+from pages.graph_page import GraphPage
+from resources.styles.colors import Colors, FontSize
 
 logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """主窗口"""
+    """Notion 风格主窗口"""
+
+    PAGE_IDS = ["chat", "notes", "graph", "dashboard"]
 
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("🧠 AI Second Brain — AI 协同个人知识库管理系统")
-        self.resize(1100, 750)
+        self.setWindowTitle("AI Second Brain")
+        self.resize(1200, 780)
+        self.setMinimumSize(900, 600)
 
-        # ---- 中心区域: Tab 页 ----
-        self.tab_widget = QTabWidget()
-        self.setCentralWidget(self.tab_widget)
+        # ============================================================
+        # 中心区域: 侧边栏 + 内容
+        # ============================================================
+        central = QWidget()
+        self.setCentralWidget(central)
+
+        root_layout = QHBoxLayout(central)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # 左侧边栏
+        self.sidebar = Sidebar()
+        self.sidebar.navigation_changed.connect(self._on_navigation)
+        root_layout.addWidget(self.sidebar)
+
+        # 右侧内容区
+        self.content_stack = QStackedWidget()
+        self.content_stack.setStyleSheet(f"background: {Colors.bg_content};")
 
         # 创建各页面
         self.chat_page = ChatPage()
-        self.notes_placeholder = self._create_placeholder("📝 智能笔记", "P2 阶段实现")
-        self.research_placeholder = self._create_placeholder("🔬 深度研究", "P5 阶段实现")
-        self.dashboard_placeholder = self._create_placeholder("📊 个人看板", "P7 阶段实现")
+        self.notes_page = NotesPage()
+        self.graph_page = GraphPage()
 
-        # 添加到 Tab
-        self.tab_widget.addTab(self.notes_placeholder, "📝 智能笔记")
-        self.tab_widget.addTab(self.chat_page, "💬 知识问答")
-        self.tab_widget.addTab(self.research_placeholder, "🔬 深度研究")
-        self.tab_widget.addTab(self.dashboard_placeholder, "📊 看板")
+        # 占位页面（dashboard）
+        self.dashboard_page = self._create_placeholder("Dashboard", "Phase 7")
 
-        # 默认打开知识问答（P1 已完成的功能）
-        self.tab_widget.setCurrentIndex(1)
+        # 按 PAGE_IDS 顺序添加（索引对齐）
+        self.content_stack.addWidget(self.chat_page)       # index 0 — chat
+        self.content_stack.addWidget(self.notes_page)       # index 1 — notes
+        self.content_stack.addWidget(self.graph_page)       # index 2 — graph
+        self.content_stack.addWidget(self.dashboard_page)   # index 3 — dashboard
 
-        # ---- 底部状态栏 ----
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
+        root_layout.addWidget(self.content_stack)
 
-        self.status_backend = QLabel("🟢 后端已连接")
-        self.status_api = QLabel("🤖 DeepSeek API")
-        self.status_bar.addWidget(self.status_backend)
-        self.status_bar.addPermanentWidget(self.status_api)
+        # 默认显示 Chat
+        self.content_stack.setCurrentIndex(0)
 
-        # 健康检查
-        self._check_health()
+        # ============================================================
+        # 状态栏
+        # ============================================================
+        status = QStatusBar()
+        status.setStyleSheet(f"""
+            QStatusBar {{
+                background: #151514;
+                color: {Colors.text_tertiary};
+                border-top: 1px solid {Colors.border_default};
+                font-size: {FontSize.xs}px;
+                padding: 2px 12px;
+            }}
+        """)
+        self.setStatusBar(status)
 
-    def _create_placeholder(self, title: str, description: str) -> QWidget:
-        """创建一个占位页面（功能未实现时显示）"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+        self.status_label = QLabel("Ready")
+        status.addWidget(self.status_label)
+
+        status.addPermanentWidget(QLabel("DeepSeek API"))
+
+        # 启动后检查后端健康
+        QTimer.singleShot(1500, lambda: asyncio.ensure_future(self._check_health()))
+
+    # ============================================================
+    # 导航
+    # ============================================================
+
+    def _on_navigation(self, page_id: str):
+        """侧边栏导航切换"""
+        try:
+            index = self.PAGE_IDS.index(page_id)
+            self.content_stack.setCurrentIndex(index)
+            logger.info(f"Switched to page: {page_id}")
+        except ValueError:
+            logger.warning(f"Unknown page: {page_id}")
+
+    # ============================================================
+    # 健康检查
+    # ============================================================
+
+    async def _check_health(self):
+        from services.api_client import api
+        try:
+            result = await api.get("/health")
+            if result.get("status") == "ok":
+                self.status_label.setText("Backend connected")
+            else:
+                self.status_label.setText("Backend error")
+        except Exception:
+            self.status_label.setText("Backend offline")
+
+    # ============================================================
+    # 工具
+    # ============================================================
+
+    @staticmethod
+    def _create_placeholder(title: str, phase: str) -> QWidget:
+        w = QWidget()
+        from PySide6.QtWidgets import QVBoxLayout
+        layout = QVBoxLayout(w)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        label = QLabel(f"<h1>{title}</h1><p>{description}</p>")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(label)
+        t = QLabel(title)
+        t.setStyleSheet(f"color: {Colors.text_primary}; font-size: 24px; font-weight: 600;")
+        t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(t)
 
-        return widget
+        d = QLabel(f"Coming in {phase}")
+        d.setStyleSheet(f"color: {Colors.text_secondary}; font-size: 14px;")
+        d.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(d)
 
-    def _check_health(self):
-        """检查后端健康状态并更新状态栏"""
-        async def check():
-            try:
-                from services.api_client import api
-                result = await api.get("/health")
-                if result.get("status") == "ok":
-                    self.status_backend.setText("🟢 后端已连接")
-                else:
-                    self.status_backend.setText("🟡 后端异常")
-            except Exception:
-                self.status_backend.setText("🔴 后端未连接")
-
-        # 用 QTimer 延迟执行异步检查
-        import asyncio
-        QTimer.singleShot(1000, lambda: asyncio.ensure_future(check()))
+        return w
