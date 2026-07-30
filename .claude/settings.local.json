@@ -20,7 +20,11 @@
       "Bash(.venv/Scripts/uvicorn.exe app.main:app --app-dir backend --host 127.0.0.1 --port 8000)",
       "Bash(curl -s http://127.0.0.1:8000/)",
       "Bash(curl -s -N -X POST http://127.0.0.1:8000/api/chat -H 'Content-Type: application/json' -d '{\"message\": \"用一句话介绍什么是AI Agent\"}')",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(gh auth *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)"
     ]
   }
 }

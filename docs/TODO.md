@@ -12,7 +12,7 @@
 
 | 阶段 | 状态 | 完成度 | 开始时间 | 完成时间 |
 |------|------|--------|---------|---------|
-| P1 基础通信 | ⏳ 准备中 | 0/12 | - | - |
+| P1 基础通信 | 🔄 进行中 | 10/12 | 2026-07-30 | - |
 | P2 笔记系统 | ⏳ 未开始 | 0/10 | - | - |
 | P3 RAG引擎 | ⏳ 未开始 | 0/12 | - | - |
 | P4 工具调用 | ⏳ 未开始 | 0/9 | - | - |
@@ -30,19 +30,19 @@
 
 ### 1.1 项目初始化
 - [x] 1.1.1 创建完整目录结构（backend/ desktop/ docs/ data/ scripts/）
-- [ ] 1.1.2 编写 backend/requirements.txt
-- [ ] 1.1.3 编写 desktop/requirements.txt
+- [x] 1.1.2 编写 backend/requirements.txt
+- [x] 1.1.3 编写 desktop/requirements.txt
 - [x] 1.1.4 创建 .env.example + backend/app/config.py（环境变量管理）
 - [x] 1.1.5 创建 .gitignore（排除 data/ .env __pycache__/ 等）
 - [x] 1.1.6 `git init` + 首次 commit
 
 ### 1.2 后端 — 基础对话 API
-- [ ] 1.2.1 创建 backend/app/main.py（FastAPI 入口 + CORS + 生命周期）
-- [ ] 1.2.2 实现 backend/app/core/llm.py（OpenAI SDK 封装 DeepSeek 调用）
-- [ ] 1.2.3 实现 backend/app/core/memory.py（滑动窗口记忆，保留最近 10 轮）
-- [ ] 1.2.4 实现 backend/app/api/chat.py — `POST /api/chat`（SSE 流式输出）
-- [ ] 1.2.5 创建 Message + Conversation 数据模型
-- [ ] 1.2.6 用 curl 测试接口：确认流式输出正常
+- [x] 1.2.1 创建 backend/app/main.py（FastAPI 入口 + CORS + 生命周期）
+- [x] 1.2.2 实现 backend/app/core/llm.py（OpenAI SDK 封装 DeepSeek 调用）
+- [x] 1.2.3 实现 backend/app/core/memory.py（滑动窗口记忆，保留最近 10 轮）
+- [x] 1.2.4 实现 backend/app/api/chat.py — `POST /api/chat`（SSE 流式输出）
+- [x] 1.2.5 创建 Message + Conversation 数据模型
+- [x] 1.2.6 用 curl 测试接口：确认流式输出正常
 
 ### 1.3 桌面端 — 最简窗口
 - [ ] 1.3.1 创建 desktop/main.py（启动后端子进程 + QApplication）

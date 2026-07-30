@@ -5,7 +5,8 @@
 
 # --- UI Framework ---
 PySide6>=6.5.0
-PySide6-WebEngine>=6.5.0
+# PySide6-WebEngine 在 P7 阶段需要，目前 PyPI 上需单独处理
+# 当前可通过 pip install pyside6-webengine 安装
 
 # --- Async Bridge ---
 qasync>=0.24.0
