@@ -35,6 +35,12 @@ def get_db():
 
 def init_db():
     """创建所有表（首次启动时调用）"""
+    # 导入所有模型，确保 Base.metadata 注册了所有表
+    import app.models.conversation  # noqa: F401
+    import app.models.message       # noqa: F401
+    import app.models.note          # noqa: F401
+    import app.models.tag           # noqa: F401
+
     # 确保数据目录存在
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
     settings.chroma_path.mkdir(parents=True, exist_ok=True)
