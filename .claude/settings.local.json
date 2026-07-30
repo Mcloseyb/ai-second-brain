@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip --version)",
+      "Bash(code --version)",
+      "Bash(git --version)",
+      "Bash(pnpm --version)",
+      "Bash(docker --version)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}

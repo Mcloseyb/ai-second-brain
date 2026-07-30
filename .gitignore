@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.so
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Data (runtime)
+data/app.db
+data/chroma_db/
+data/uploads/*
+!data/uploads/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyInstaller
+*.spec.bak
+build/
+dist/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic
+backend/alembic/versions/*
+!backend/alembic/versions/.gitkeep
