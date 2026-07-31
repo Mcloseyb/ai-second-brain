@@ -71,11 +71,13 @@ from app.api.chat import router as chat_router
 from app.api.notes import router as notes_router
 from app.api.tags import router as tags_router
 from app.api.documents import router as documents_router
+from app.api.sync import router as sync_router
 
 app.include_router(chat_router)
 app.include_router(notes_router)
 app.include_router(tags_router)
 app.include_router(documents_router)
+app.include_router(sync_router)
 
 
 # ============================================================
