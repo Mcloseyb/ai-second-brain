@@ -142,8 +142,11 @@ export const dashboardApi = {
   /** 统计概览 */
   stats: () => client.get('/api/dashboard/stats') as Promise<DashboardStatsResponse>,
 
-  /** 知识图谱（语义互联）— notebook_id 可选，threshold 默认 0.35 */
-  graph: (params: { notebook_id?: number | null; threshold?: number } = {}) =>
+  /**
+   * 知识图谱（语义互联 + Top-K 邻居）
+   * top_k = 每篇笔记连接的最强邻居数（默认 3）；threshold = 全量边相似度下限
+   */
+  graph: (params: { notebook_id?: number | null; threshold?: number; top_k?: number } = {}) =>
     client.get('/api/dashboard/graph', { params }) as Promise<GraphResponse>,
 }
 

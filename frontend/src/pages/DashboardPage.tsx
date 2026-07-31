@@ -1,16 +1,15 @@
 /**
  * DashboardPage — 数据看板页面（P7 真实图谱）
  * ------------------------------------------
- * 统计卡片（真实 stats API）+ 知识图谱（语义互联）+ 热门标签。
- * 图谱筛选: 关联强度滑块（客户端过滤边）+ 标签多选（过滤节点）。
- * 点击图谱节点 → 跳转打开对应笔记。
+ * 统计卡片（真实 stats API）+ 知识图谱（语义互联，Top-K 邻居 + 悬停显边）。
+ * 图谱筛选: 邻居数 K 滑块（控制默认边密度）+ 标签多选（过滤节点）。
+ * 悬停节点 → 临时亮出该节点全部语义关联。点击节点 → 跳转打开笔记。
  */
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu, DropdownMenuContent,
@@ -26,7 +25,6 @@ import {
   RefreshCw,
   Tags,
   Link2,
-  BarChart3,
   SlidersHorizontal,
   ChevronDown,
   Check,
@@ -34,9 +32,8 @@ import {
 import type { Tag, GraphNode, GraphEdge } from '@/types'
 import { cn } from '@/lib/utils'
 
-// 关联强度滑块档位（客户端过滤边，避免高频请求后端）
-const THRESHOLD_STEPS = [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.60, 0.70]
-const THRESHOLD_LABELS = ['25%', '30%', '35%', '40%', '45%', '50%', '60%', '70%']
+// 邻居数 K 档位（每篇笔记连接的语义最近邻居数，控制默认边密度）
+const TOP_K_OPTIONS = [1, 2, 3, 4, 5]
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -46,10 +43,11 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ total_notes: 0, total_tags: 0, total_links: 0, synced: 0, pending: 0 })
   const [tags, setTags] = useState<Tag[]>([])
   const [allNodes, setAllNodes] = useState<GraphNode[]>([])
+  const [topKEdges, setTopKEdges] = useState<GraphEdge[]>([])
   const [allEdges, setAllEdges] = useState<GraphEdge[]>([])
 
   // ---- 筛选状态（纯客户端） ----
-  const [threshold, setThreshold] = useState(0.35)
+  const [topK, setTopK] = useState(3)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
   const loadData = useCallback(async () => {
@@ -57,19 +55,21 @@ export default function DashboardPage() {
     try {
       const [statsRes, graphRes, tagsRes] = await Promise.all([
         dashboardApi.stats(),
-        dashboardApi.graph({ threshold: 0.25 }), // 拉取所有弱边，客户端按滑块过滤
+        // threshold=0.2 拉足全量弱边供悬停展示；默认展示边由后端按 top_k 算好
+        dashboardApi.graph({ threshold: 0.2, top_k: topK }),
         tagsApi.list(),
       ])
       setStats(statsRes)
       setTags(tagsRes.tags || [])
       setAllNodes(graphRes.nodes || [])
-      setAllEdges(graphRes.edges || [])
+      setTopKEdges(graphRes.edges || [])
+      setAllEdges(graphRes.all_edges || [])
     } catch (e) {
       console.error('加载看板数据失败:', e)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [topK])
 
   useEffect(() => {
     loadData()
@@ -80,14 +80,15 @@ export default function DashboardPage() {
     ? allNodes
     : allNodes.filter((n) => n.tags?.some((t) => selectedTags.includes(t)))
   const nodeIdSet = new Set(filteredNodes.map((n) => n.id))
-  const filteredEdges = allEdges.filter(
-    (e) =>
-      nodeIdSet.has(e.source) &&
-      nodeIdSet.has(e.target) &&
-      (e.weight || 0) >= threshold,
+  // 默认展示边（Top-K，已稀疏），仅按标签过滤
+  const filteredEdges = topKEdges.filter(
+    (e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target),
+  )
+  // 悬停展示的完整关联边，同样按标签过滤
+  const filteredAllEdges = allEdges.filter(
+    (e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target),
   )
 
-  // 防抖：强度滑块不直接调用后端，用 useMemo 客户端过滤即可
   const graphNodes = filteredNodes
   const graphEdges = filteredEdges
 
@@ -119,65 +120,25 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ======== 中行：热门标签 ======== */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <BarChart3 className="size-4" />
-            热门标签
-            <span className="text-[10px] text-muted-foreground font-normal">（仅着色，不参与连线）</span>
-          </CardTitle>
-        </CardHeader>
-        <Separator />
-        <CardContent className="p-4">
-          {loading ? (
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-6 w-20" />
-              ))}
-            </div>
-          ) : tags.length === 0 ? (
-            <p className="text-sm text-muted-foreground">暂无标签</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => (
-                <Badge
-                  key={tag.id}
-                  variant="secondary"
-                  className={cn(
-                    'text-sm px-3 py-1 cursor-pointer transition-colors',
-                    selectedTags.includes(tag.name) && 'bg-primary text-primary-foreground',
-                  )}
-                  onClick={() => toggleTag(tag.name)}
-                >
-                  {tag.name}
-                  {tag.note_count ? ` (${tag.note_count})` : ''}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* ======== 知识图谱（语义互联） ======== */}
       <Card className="flex-1 min-h-[400px]">
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-medium">知识图谱（语义互联）</CardTitle>
           <div className="flex items-center gap-2">
-            {/* 关联强度滑块 */}
+            {/* 邻居数 K 滑块（控制默认边密度） */}
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <SlidersHorizontal className="size-3.5" />
-              关联强度
+              邻居数
               <input
                 type="range"
                 min={0}
-                max={THRESHOLD_STEPS.length - 1}
+                max={TOP_K_OPTIONS.length - 1}
                 step={1}
-                value={THRESHOLD_STEPS.indexOf(threshold)}
-                onChange={(e) => setThreshold(THRESHOLD_STEPS[Number(e.target.value)])}
+                value={TOP_K_OPTIONS.indexOf(topK)}
+                onChange={(e) => setTopK(TOP_K_OPTIONS[Number(e.target.value)])}
                 className="w-28 accent-primary"
               />
-              <span className="w-9">{threshold.toFixed(2)}</span>
+              <span className="w-4">{topK}</span>
             </div>
             {/* 标签筛选下拉 */}
             <DropdownMenu>
@@ -228,6 +189,7 @@ export default function DashboardPage() {
           <KnowledgeGraph
             nodes={graphNodes}
             edges={graphEdges}
+            allEdges={filteredAllEdges}
             loading={loading}
             className="h-full"
             onNodeClick={handleNodeClick}

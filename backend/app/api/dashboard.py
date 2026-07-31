@@ -27,7 +27,8 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 # 图谱默认参数
 DEFAULT_THRESHOLD = 0.35
-MAX_EDGES = 200           # 最多返回边数（超出取最强 Top-N，防前端卡顿）
+DEFAULT_TOP_K = 3           # 每篇笔记默认连接的最强邻居数
+MAX_EDGES = 200           # 全量边返回上限（悬停展示用，防止大数据量卡顿）
 MIN_SYMBOL = 12           # 无 embedding 的孤点大小
 # 节点大小 = 基础 18 + 字数缩放，乘引用度系数
 BASE_SYMBOL = 18
@@ -100,17 +101,24 @@ def _build_nodes(db: Session, refs: dict[int, int]) -> list[dict]:
     return nodes
 
 
-def _build_edges(embeddings: dict[int, list[float]], threshold: float) -> list[dict]:
+def _build_edges(
+    embeddings: dict[int, list[float]],
+    top_k: int,
+    threshold: float,
+) -> tuple[list[dict], list[dict]]:
     """
     基于 Embedding 余弦相似度构建连线（纯语义，用户约束）
 
-    一次性向量矩阵 → numpy 余弦相似度 → 过滤阈值 + 排除自身 + 去重。
+    返回两组边:
+      - edges:     每篇笔记只连语义最强的 top_k 个邻居（无向去重）
+                   → 默认图稀疏（边数上限 ≈ N * top_k / 2），不杂乱
+      - all_edges: 全部相似度 >= threshold 的边，供前端悬停节点时
+                   临时亮出该节点的完整语义关联（超限取最强 Top-N）
     """
     if len(embeddings) < 2:
-        return []
+        return [], []
 
     ids = list(embeddings.keys())
-    id_to_idx = {nid: i for i, nid in enumerate(ids)}
     matrix = np.array([embeddings[nid] for nid in ids], dtype=float)
 
     # 归一化 → 余弦相似度 = 归一化向量的点积
@@ -119,42 +127,63 @@ def _build_edges(embeddings: dict[int, list[float]], threshold: float) -> list[d
     matrix = matrix / norms
     sim = matrix @ matrix.T
 
-    edges: list[dict] = []
+    # ---- 收集所有 >= threshold 的无向边（权重表） ----
     n = len(ids)
+    weights: dict[tuple[int, int], float] = {}
     for i in range(n):
         for j in range(i + 1, n):
             s = float(sim[i][j])
             if s >= threshold:
-                edges.append({
-                    "source": ids[i],
-                    "target": ids[j],
-                    "weight": round(s, 4),
-                })
+                weights[(ids[i], ids[j])] = round(s, 4)
 
-    # 超限 → 取 Top-N 最强边
-    if len(edges) > MAX_EDGES:
-        edges.sort(key=lambda e: e["weight"], reverse=True)
-        edges = edges[:MAX_EDGES]
+    # ---- Top-K: 每个节点取相似度最强的 top_k 个邻居 ----
+    neighbor_scores: dict[int, list[tuple[float, int]]] = {}
+    for (a, b), w in weights.items():
+        neighbor_scores.setdefault(a, []).append((w, b))
+        neighbor_scores.setdefault(b, []).append((w, a))
 
-    return edges
+    selected: set[tuple[int, int]] = set()
+    for nid, lst in neighbor_scores.items():
+        lst.sort(key=lambda x: x[0], reverse=True)
+        for _, other in lst[:top_k]:
+            selected.add((min(nid, other), max(nid, other)))
+
+    edges = [
+        {"source": a, "target": b, "weight": weights[(a, b)]}
+        for a, b in sorted(selected)
+    ]
+
+    # ---- 全量边（悬停展示用） ----
+    all_edges = [
+        {"source": a, "target": b, "weight": w}
+        for (a, b), w in sorted(weights.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    if len(all_edges) > MAX_EDGES:
+        all_edges = all_edges[:MAX_EDGES]
+
+    return edges, all_edges
 
 
 @router.get("/graph")
 async def dashboard_graph(
     notebook_id: int | None = Query(default=None, description="按笔记库筛选，默认全部"),
-    threshold: float = Query(default=DEFAULT_THRESHOLD, ge=0.1, le=1.0, description="语义相似度阈值"),
+    threshold: float = Query(default=DEFAULT_THRESHOLD, ge=0.1, le=1.0, description="全量边相似度阈值"),
+    top_k: int = Query(default=DEFAULT_TOP_K, ge=1, le=10, description="每篇笔记连接的最强邻居数"),
     db: Session = Depends(get_db),
 ):
     """
-    知识图谱数据（语义互联）
+    知识图谱数据（语义互联 + Top-K 邻居）
 
-    节点 = 每篇笔记；边 = 两篇笔记 Embedding 余弦相似度 >= 阈值。
+    节点 = 每篇笔记。
+    edges = 每篇笔记与其语义最强的 top_k 个邻居连线（默认稀疏，不杂乱）。
+    all_edges = 全部相似度 >= threshold 的边（供前端悬停节点时展示完整关联）。
     标签仅作节点分类着色（category），不参与连线（用户明确约束）。
 
     Returns:
         {
           "nodes": [{"id", "name", "category", "symbolSize", "word_count", "notebook_id", "folder", "tags"}],
-          "edges": [{"source", "target", "weight"}]
+          "edges": [{"source", "target", "weight"}],
+          "all_edges": [{"source", "target", "weight"}]
         }
     """
     refs = _ref_counts(db)
@@ -172,10 +201,11 @@ async def dashboard_graph(
         nid: vec for nid, vec in embeddings.items()
         if nid in keep_ids
     }
-    edges = _build_edges(scope_embeddings, threshold)
+    edges, all_edges = _build_edges(scope_embeddings, top_k, threshold)
 
     logger.info(
-        f"图谱数据: {len(nodes)} 节点, {len(edges)} 条边 "
-        f"(threshold={threshold}, notebook_id={notebook_id})"
+        f"图谱数据: {len(nodes)} 节点, {len(edges)} 条 Top-K 边, "
+        f"{len(all_edges)} 条全量边 "
+        f"(threshold={threshold}, top_k={top_k}, notebook_id={notebook_id})"
     )
-    return {"nodes": nodes, "edges": edges}
+    return {"nodes": nodes, "edges": edges, "all_edges": all_edges}

@@ -1,8 +1,9 @@
 /**
- * KnowledgeGraph — ECharts 知识图谱可视化（P7 语义互联）
- * ---------------------------------------------------
+ * KnowledgeGraph — ECharts 知识图谱可视化（P7 语义互联 + Top-K/悬停显边）
+ * ---------------------------------------------------------------------
  * 节点 = 笔记（标签分类着色 + 字数/引用度决定大小）
- * 连线 = 语义相似度（粗细映射相似度）
+ * 默认连线 = 每篇笔记 Top-K 语义邻居（稀疏，后端算好，避免全图过密）
+ * 悬停节点 = 临时亮出该节点的全部语义关联（粗细=相似度），移出后恢复默认
  */
 import { useRef, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,6 +14,8 @@ import type { GraphNode, GraphEdge } from '@/types'
 interface KnowledgeGraphProps {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  /** 全量语义边（>= 阈值），悬停节点时用于亮出完整关联 */
+  allEdges?: GraphEdge[]
   loading?: boolean
   className?: string
   onNodeClick?: (nodeId: number) => void
@@ -29,29 +32,53 @@ function categoryColor(category: string): string {
   return CATEGORY_COLORS[hash % CATEGORY_COLORS.length]
 }
 
+// 悬停时最多亮出的关联边数（防单节点关联过多时卡顿）
+const REVEAL_MAX = 15
+
+// 无向边去重 key（source/target 顺序无关）
+function pairKey(a: number, b: number): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`
+}
+
+type EChart = {
+  setOption: (o: Record<string, unknown>) => void
+  resize: () => void
+  dispose: () => void
+  on: (e: string, cb: (p: unknown) => void) => void
+}
+
 export default function KnowledgeGraph({
   nodes,
   edges,
+  allEdges,
   loading,
   className,
   onNodeClick,
 }: KnowledgeGraphProps) {
   const chartRef = useRef<HTMLDivElement>(null)
-  const instanceRef = useRef<unknown>(null)
+  const instanceRef = useRef<EChart | null>(null)
 
   useEffect(() => {
     if (!chartRef.current || loading) return
 
-    let chart: {
-      setOption: (o: Record<string, unknown>) => void
-      resize: () => void
-      dispose: () => void
-      on: (e: string, cb: (p: unknown) => void) => void
-    } | null = null
+    let chart: EChart | null = null
+    let restoreTimer: number | undefined
 
     import('echarts').then((echarts) => {
       if (!chartRef.current) return
       chart = echarts.init(chartRef.current, undefined, { renderer: 'canvas' })
+
+      const buildLinks = (edgeList: GraphEdge[]) =>
+        edgeList.map((e) => ({
+          source: String(e.source),
+          target: String(e.target),
+          value: e.weight || 0,
+          lineStyle: {
+            // 相似度 0.35→1px, 0.7→2px, 1.0→3px
+            width: Math.max(0.5, (e.weight || 0) * 3),
+            curveness: 0.2,
+          },
+        }))
 
       // 按分类分组，categories 动态生成（标签名 → 颜色）
       const categories = Array.from(new Set(nodes.map((n) => n.category))).map((name) => ({
@@ -93,16 +120,7 @@ export default function KnowledgeGraph({
               word_count: n.word_count,
               tags: n.tags,
             })),
-            links: edges.map((e) => ({
-              source: String(e.source),
-              target: String(e.target),
-              value: e.weight || 0,
-              lineStyle: {
-                // 相似度 0.35→1px, 0.7→2px, 1.0→3px
-                width: Math.max(0.5, (e.weight || 0) * 3),
-                curveness: 0.2,
-              },
-            })),
+            links: buildLinks(edges),
             categories,
             label: {
               show: true,
@@ -129,6 +147,37 @@ export default function KnowledgeGraph({
         })
       }
 
+      // ---- 悬停节点 → 亮出该节点全部语义关联；移出 → 恢复默认 Top-K ----
+      chart.on('mouseover', (raw: unknown) => {
+        const params = raw as { dataType?: string; data?: { id?: string | number } }
+        if (params.dataType !== 'node') return
+        const id = Number(params.data?.id)
+        if (Number.isNaN(id)) return
+        // 取消恢复定时器：从节点 A 直接移到节点 B 时，不应先恢复默认再亮出（会闪烁）
+        window.clearTimeout(restoreTimer)
+        // 该节点的完整关联（按相似度降序，最多 REVEAL_MAX 条）
+        const incident = (allEdges || [])
+          .filter((e) => e.source === id || e.target === id)
+          .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+          .slice(0, REVEAL_MAX)
+        // 与默认 Top-K 边合并去重（默认边保留，追加该节点独有的关联）
+        const defaultKeys = new Set(edges.map((e) => pairKey(e.source, e.target)))
+        const merged = [
+          ...edges,
+          ...incident.filter((e) => !defaultKeys.has(pairKey(e.source, e.target))),
+        ]
+        chart?.setOption({ series: [{ links: buildLinks(merged) }] })
+      })
+
+      chart.on('mouseout', (raw: unknown) => {
+        const params = raw as { dataType?: string }
+        if (params.dataType !== 'node') return
+        // 延迟 120ms 恢复默认：期间若又悬停到相邻节点，上面的 clearTimeout 会取消恢复
+        restoreTimer = window.setTimeout(() => {
+          chart?.setOption({ series: [{ links: buildLinks(edges) }] })
+        }, 120)
+      })
+
       instanceRef.current = chart
 
       // 监听容器大小变化
@@ -139,9 +188,11 @@ export default function KnowledgeGraph({
     })
 
     return () => {
+      window.clearTimeout(restoreTimer)
       if (chart) chart.dispose()
+      instanceRef.current = null
     }
-  }, [nodes, edges, loading])
+  }, [nodes, edges, allEdges, loading])
 
   if (loading) {
     return (

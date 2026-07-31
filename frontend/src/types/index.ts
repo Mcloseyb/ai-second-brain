@@ -225,7 +225,10 @@ export interface GraphEdge {
 
 export interface GraphData {
   nodes: GraphNode[]
+  /** 默认展示边：每篇笔记 Top-K 语义邻居（稀疏） */
   edges: GraphEdge[]
+  /** 全量语义边（>= 阈值），供悬停节点时展示完整关联 */
+  all_edges?: GraphEdge[]
 }
 
 export interface DashboardStatsResponse extends DashboardStats {}
