@@ -15,6 +15,7 @@ import type {
   NoteSearchResponse,
   TagsListResponse,
   TagResponse,
+  Conversation,
   ConversationsListResponse,
   MessagesListResponse,
   SyncStatusResponse,
