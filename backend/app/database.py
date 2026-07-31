@@ -10,13 +10,16 @@ from app.config import settings
 # 共享的 Base — 所有模型继承自这个
 Base = declarative_base()
 
-# 创建引擎
-# SQLite 需要 check_same_thread=False 才能在异步线程中使用
+# 创建引擎（使用绝对路径，避免 CWD 不同导致找不到数据库文件）
+_db_url = settings.database_url
+if "sqlite" in _db_url:
+    _db_url = f"sqlite:///{settings.database_path}"
+
 engine = create_engine(
-    settings.database_url,
+    _db_url,
     echo=settings.debug,
     connect_args={"check_same_thread": False}
-    if "sqlite" in settings.database_url
+    if "sqlite" in _db_url
     else {},
 )
 
@@ -34,12 +37,13 @@ def get_db():
 
 
 def init_db():
-    """创建所有表（首次启动时调用）"""
+    """创建所有表 + 执行迁移（首次启动时调用）"""
     # 导入所有模型，确保 Base.metadata 注册了所有表
     import app.models.conversation  # noqa: F401
     import app.models.message       # noqa: F401
     import app.models.note          # noqa: F401
     import app.models.tag           # noqa: F401
+    import app.models.notebook      # noqa: F401
 
     # 确保数据目录存在
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -47,3 +51,18 @@ def init_db():
     settings.upload_path.mkdir(parents=True, exist_ok=True)
 
     Base.metadata.create_all(bind=engine)
+
+    # SQLite 轻量迁移 — 给已有 notes 表补上 notebook_id 列
+    if "sqlite" in _db_url:
+        import logging
+        _logger = logging.getLogger(__name__)
+        with engine.connect() as conn:
+            # 检查列是否存在
+            result = conn.exec_driver_sql("PRAGMA table_info('notes')")
+            columns = {row[1] for row in result}
+            if "notebook_id" not in columns:
+                _logger.info("迁移: 添加 notes.notebook_id 列")
+                conn.exec_driver_sql(
+                    "ALTER TABLE notes ADD COLUMN notebook_id INTEGER REFERENCES notebooks(id)"
+                )
+                conn.commit()

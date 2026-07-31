@@ -13,6 +13,7 @@ import type {
   NotesListResponse,
   NoteResponse,
   NoteSearchResponse,
+  AutoTagResponse,
   TagsListResponse,
   TagResponse,
   Conversation,
@@ -22,6 +23,8 @@ import type {
   SyncNowResponse,
   PendingSyncResponse,
   ImportResponse,
+  Notebook,
+  FolderTreeResponse,
 } from '@/types'
 
 // 后端固定地址
@@ -55,8 +58,8 @@ export const notesApi = {
   get: (id: number) =>
     client.get(`/api/notes/${id}`) as Promise<NoteResponse>,
 
-  /** 新建: {title, content, tags[]} */
-  create: (data: { title: string; content: string; tags: string[] }) =>
+  /** 新建: {title, content, tags[], notebook_id?, folder?} */
+  create: (data: { title: string; content: string; tags: string[]; notebook_id?: number; folder?: string }) =>
     client.post('/api/notes', data) as Promise<NoteResponse>,
 
   /** 更新: {title?, content?, tags?} */
@@ -67,9 +70,45 @@ export const notesApi = {
   remove: (id: number) =>
     client.delete(`/api/notes/${id}`) as Promise<{ ok: boolean }>,
 
-  /** 语义搜索: {query, top_k?, threshold?} */
-  search: (data: { query: string; top_k?: number; threshold?: number }) =>
+  /** 语义搜索: {query, top_k?, threshold?, hybrid?} */
+  search: (data: { query: string; top_k?: number; threshold?: number; hybrid?: boolean }) =>
     client.post('/api/notes/search', data) as Promise<NoteSearchResponse>,
+
+  /** 移动笔记到文件夹: {folder} */
+  move: (noteId: number, folder: string) =>
+    client.put(`/api/notebooks/notes/${noteId}/move`, null, { params: { folder } }) as Promise<{ note: NoteResponse['note'] }>,
+
+  /** AI 自动标签推荐（P4 简易版） */
+  autoTag: (noteId: number) =>
+    client.post(`/api/notes/${noteId}/auto-tag`) as Promise<AutoTagResponse>,
+}
+
+// ============================================================
+// 笔记库
+// ============================================================
+export const notebooksApi = {
+  /** 列表 */
+  list: () => client.get('/api/notebooks') as Promise<{ notebooks: Notebook[] }>,
+
+  /** 创建: {name} */
+  create: (name: string) =>
+    client.post('/api/notebooks', { name }) as Promise<{ notebook: Notebook }>,
+
+  /** 删除 */
+  remove: (id: number) =>
+    client.delete(`/api/notebooks/${id}`) as Promise<{ ok: boolean }>,
+
+  /** 重命名 */
+  rename: (id: number, name: string) =>
+    client.put(`/api/notebooks/${id}`, { name }) as Promise<{ notebook: Notebook }>,
+
+  /** 文件夹树 + 根目录笔记 */
+  folderTree: (notebookId: number) =>
+    client.get(`/api/notebooks/${notebookId}/folders`) as Promise<FolderTreeResponse>,
+
+  /** 按文件夹获取笔记 */
+  notes: (notebookId: number, folder?: string) =>
+    client.get(`/api/notebooks/${notebookId}/notes`, { params: { folder } }) as Promise<NotesListResponse>,
 }
 
 // ============================================================

@@ -44,6 +44,34 @@ async def lifespan(app: FastAPI):
     logger.info(f"📁 ChromaDB: {settings.chroma_path}")
     logger.info(f"📁 上传目录: {settings.upload_path}")
 
+    # 确保默认笔记库存在 + 迁移旧笔记
+    try:
+        from app.database import SessionLocal
+        from app.models.notebook import Notebook
+        from app.models.note import Note
+
+        db = SessionLocal()
+        try:
+            default_nb = db.query(Notebook).first()
+            if not default_nb:
+                default_nb = Notebook(name="我的笔记库", description="默认笔记库")
+                db.add(default_nb)
+                db.commit()
+                db.refresh(default_nb)
+                logger.info("📓 已创建默认笔记库")
+
+            # 迁移 notebook_id 为 None 的旧笔记
+            orphan_notes = db.query(Note).filter(Note.notebook_id.is_(None)).all()
+            if orphan_notes:
+                for note in orphan_notes:
+                    note.notebook_id = default_nb.id
+                db.commit()
+                logger.info(f"📓 {len(orphan_notes)} 篇旧笔记已迁移到默认笔记库")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"笔记库初始化失败（不影响使用）: {e}")
+
     # P3.1.5: 启动时自动索引未同步的笔记
     try:
         from app.database import SessionLocal
@@ -168,12 +196,14 @@ from app.api.notes import router as notes_router
 from app.api.tags import router as tags_router
 from app.api.documents import router as documents_router
 from app.api.sync import router as sync_router
+from app.api.notebooks import router as notebooks_router
 
 app.include_router(chat_router)
 app.include_router(notes_router)
 app.include_router(tags_router)
 app.include_router(documents_router)
 app.include_router(sync_router)
+app.include_router(notebooks_router)
 
 
 # ============================================================

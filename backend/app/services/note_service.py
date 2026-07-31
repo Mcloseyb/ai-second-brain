@@ -25,12 +25,21 @@ class NoteService:
     """笔记业务服务"""
 
     @staticmethod
-    async def create(db: Session, title: str, content: str = "", tags: list[str] | None = None) -> Note:
+    async def create(
+        db: Session,
+        title: str,
+        content: str = "",
+        tags: list[str] | None = None,
+        notebook_id: int | None = None,
+        folder: str = "",
+    ) -> Note:
         """创建笔记（自动同步到向量库）"""
         note = Note(
             title=title,
             content=content,
             word_count=len(content.split()) if content else 0,
+            notebook_id=notebook_id,
+            folder=folder,
         )
 
         if tags:
@@ -120,16 +129,31 @@ class NoteService:
         db: Session,
         search: str | None = None,
         tag: str | None = None,
+        notebook_id: int | None = None,
+        folder: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Note], int]:
         """
-        笔记列表（分页 + 搜索 + 标签筛选）
+        笔记列表（分页 + 搜索 + 标签筛选 + 笔记库/文件夹筛选）
 
         Returns:
             (notes, total_count)
         """
         query = db.query(Note)
+
+        # 笔记库筛选
+        if notebook_id is not None:
+            query = query.filter(Note.notebook_id == notebook_id)
+
+        # 文件夹筛选
+        if folder is not None:
+            if folder == "":
+                query = query.filter((Note.folder == "") | (Note.folder.is_(None)))
+            else:
+                query = query.filter(
+                    (Note.folder == folder) | Note.folder.startswith(folder + "/")
+                )
 
         # 关键词搜索（标题 + 内容）
         if search:

@@ -41,11 +41,16 @@ class Note(Base):
     last_synced_at = Column(DateTime, nullable=True)
     #   最后一次同步到 ChromaDB 向量库的时间
 
+    # === 归属笔记库 ===
+    notebook_id = Column(Integer, ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=True)
+    #   None = 迁移前的旧笔记，由默认笔记库接管
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # 关联标签（多对多）
+    # 关联
     tags = relationship("Tag", secondary=note_tags, back_populates="notes", lazy="selectin")
+    notebook = relationship("Notebook", back_populates="notes")
 
     def to_dict(self, include_content: bool = True) -> dict:
         result = {
@@ -54,6 +59,7 @@ class Note(Base):
             "format": self.format,
             "word_count": self.word_count,
             "folder": self.folder,
+            "notebook_id": self.notebook_id,
             "source_type": self.source_type,
             "source_path": self.source_path,
             "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,

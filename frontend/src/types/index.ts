@@ -9,6 +9,7 @@ export interface Note {
   title: string
   content?: string
   folder?: string
+  notebook_id?: number | null
   format: string
   word_count: number
   source_type?: string
@@ -24,11 +25,37 @@ export interface NoteListItem {
   id: number
   title: string
   folder?: string
+  notebook_id?: number | null
   format: string
   word_count: number
   tags: Tag[]
   created_at: string
   updated_at: string
+}
+
+// ---- Notebook types ----
+
+export interface Notebook {
+  id: number
+  name: string
+  description: string
+  note_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface FolderNode {
+  name: string
+  path: string
+  note_count: number
+  notes: NoteListItem[]
+  children: FolderNode[]
+}
+
+export interface FolderTreeResponse {
+  folders: FolderNode[]
+  root_notes: NoteListItem[]
+  total: number
 }
 
 export interface Tag {
@@ -216,4 +243,19 @@ export interface NoteSearchResult {
 export interface NoteSearchResponse {
   results: NoteSearchResult[]
   query: string
+}
+
+// ---- AI 自动标签（P4） ----
+
+export interface TagSuggestion {
+  tag: string
+  type: 'existing' | 'new'
+  tag_id: number | null
+  keyword: string
+  score: number
+}
+
+export interface AutoTagResponse {
+  note_id: number
+  suggestions: TagSuggestion[]
 }

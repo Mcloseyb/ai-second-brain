@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services.note_service import note_service
 from app.core.rag_engine import rag_engine
+from app.agents.tag_agent import tag_agent
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
@@ -21,6 +22,8 @@ class NoteCreate(BaseModel):
     title: str = Field(default="Untitled", max_length=500)
     content: str = Field(default="")
     tags: list[str] = Field(default_factory=list)
+    notebook_id: int | None = Field(default=None, description="所属笔记库 ID")
+    folder: str = Field(default="", description="文件夹路径，如 AI/Agent")
 
 
 class NoteUpdate(BaseModel):
@@ -33,6 +36,7 @@ class NoteSearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000, description="自然语言搜索查询")
     top_k: int = Field(default=5, ge=1, le=20, description="返回结果数量")
     threshold: float = Field(default=0.0, ge=0.0, le=1.0, description="相似度阈值")
+    hybrid: bool = Field(default=True, description="是否启用混合检索(semantic+BM25)，False 则纯语义")
 
 
 # ============================================================
@@ -42,7 +46,14 @@ class NoteSearchRequest(BaseModel):
 @router.post("", status_code=201)
 async def create_note(data: NoteCreate, db: Session = Depends(get_db)):
     """创建笔记"""
-    note = await note_service.create(db, title=data.title, content=data.content, tags=data.tags)
+    note = await note_service.create(
+        db,
+        title=data.title,
+        content=data.content,
+        tags=data.tags,
+        notebook_id=data.notebook_id,
+        folder=data.folder,
+    )
     return {"note": note.to_dict()}
 
 
@@ -50,12 +61,22 @@ async def create_note(data: NoteCreate, db: Session = Depends(get_db)):
 async def list_notes(
     search: str | None = Query(default=None, description="搜索关键词"),
     tag: str | None = Query(default=None, description="按标签筛选"),
+    notebook_id: int | None = Query(default=None, description="按笔记库筛选"),
+    folder: str | None = Query(default=None, description="按文件夹筛选"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """笔记列表（分页 + 搜索 + 筛选）"""
-    notes, total = note_service.list_notes(db, search=search, tag=tag, page=page, page_size=page_size)
+    notes, total = note_service.list_notes(
+        db,
+        search=search,
+        tag=tag,
+        notebook_id=notebook_id,
+        folder=folder,
+        page=page,
+        page_size=page_size,
+    )
     return {
         "notes": [n.to_dict(include_content=False) for n in notes],
         "total": total,
@@ -120,6 +141,7 @@ async def search_notes(data: NoteSearchRequest, db: Session = Depends(get_db)):
         query=data.query,
         top_k=data.top_k,
         threshold=data.threshold,
+        hybrid=data.hybrid,
     )
 
     # 补充笔记元数据（folder、tags 等）
@@ -141,3 +163,34 @@ async def search_notes(data: NoteSearchRequest, db: Session = Depends(get_db)):
         "results": enriched,
         "query": data.query,
     }
+
+
+# ============================================================
+# AI 自动标签推荐（P4 简易版: jieba TF-IDF + Embedding）
+# ============================================================
+
+@router.post("/{note_id}/auto-tag")
+async def auto_tag_note(note_id: int, db: Session = Depends(get_db)):
+    """
+    AI 自动标签推荐 — 根据笔记内容推荐 3-5 个标签
+
+    简易版技术方案: jieba TF-IDF 关键词提取 + Embedding 语义匹配已有标签，
+    零 LLM token（纯规则 + 一次 Embedding API 调用）。
+
+    Returns:
+        {
+          "note_id": 1,
+          "suggestions": [
+            {"tag": "深度学习", "type": "existing", "tag_id": 3,
+             "keyword": "神经网络", "score": 0.82},
+            {"tag": "transformer", "type": "new", "tag_id": null,
+             "keyword": "transformer", "score": 0.62}
+          ]
+        }
+    """
+    note = note_service.get_by_id(db, note_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    suggestions = await tag_agent.suggest_tags(db, note)
+    return {"note_id": note_id, "suggestions": suggestions}

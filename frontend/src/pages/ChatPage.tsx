@@ -2,7 +2,7 @@
  * ChatPage — 知识问答页面
  * -----------------------
  * 对话列表 + 聊天消息区 + 输入框。
- * 支持 SSE 流式对话、知识库搜索、文档上传。
+ * 知识库搜索结果在右侧可折叠面板中展示。
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -16,7 +16,9 @@ import FileDropZone from '@/components/documents/FileDropZone'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { MessageSquare, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { MessageSquare, Search, PanelRightClose, PanelRightOpen } from 'lucide-react'
 
 export default function ChatPage() {
   const { messages, generating, sendMessage, newChat, searchResults, searchQuery } = useChatStore()
@@ -25,6 +27,7 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showImport, setShowImport] = useState(false)
   const [searchEnabled, setSearchEnabled] = useState(true)
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false)
 
   // ---- 自动滚动到底部 ----
   useEffect(() => {
@@ -32,7 +35,14 @@ export default function ChatPage() {
       const el = scrollRef.current
       el.scrollTop = el.scrollHeight
     }
-  }, [messages, searchResults])
+  }, [messages])
+
+  // ---- 搜索有结果时自动展开面板 ----
+  useEffect(() => {
+    if (searchResults.length > 0) {
+      setSearchPanelOpen(true)
+    }
+  }, [searchResults])
 
   // ---- 文件导入 ----
   const handleFileImport = async (file: File) => {
@@ -59,6 +69,7 @@ export default function ChatPage() {
 
   // ---- 是否正在搜索 ----
   const isSearching = searchEnabled && generating && searchResults.length === 0
+  const hasSearchContent = searchResults.length > 0 || isSearching
 
   return (
     <div className="flex h-full gap-4">
@@ -67,21 +78,11 @@ export default function ChatPage() {
         <ConversationList />
       </div>
 
-      {/* ======== 右侧：聊天区域 ======== */}
+      {/* ======== 中间：聊天区域 ======== */}
       <div className="flex-1 min-w-0 h-full flex flex-col gap-3">
         {/* 文档导入区域（可折叠） */}
         {showImport && (
           <FileDropZone onFile={handleFileImport} disabled={false} />
-        )}
-
-        {/* 知识库搜索结果 */}
-        {(searchResults.length > 0 || isSearching) && (
-          <SearchResults
-            results={searchResults}
-            loading={isSearching}
-            query={searchQuery}
-            onSelect={handleSelectNote}
-          />
         )}
 
         {/* 消息列表 */}
@@ -126,22 +127,44 @@ export default function ChatPage() {
 
         {/* 输入框 + 搜索开关 */}
         <div className="shrink-0 px-1 pb-1 space-y-2">
-          {/* 搜索知识库开关 */}
-          <div className="flex items-center gap-2 px-1">
-            <Switch
-              id="search-kb"
-              checked={searchEnabled}
-              onCheckedChange={setSearchEnabled}
-              disabled={generating}
-              className="scale-75"
-            />
-            <Label
-              htmlFor="search-kb"
-              className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1"
-            >
-              <Search className="size-3" />
-              搜索知识库
-            </Label>
+          {/* 搜索知识库开关 + 搜索结果面板切换 */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="search-kb"
+                checked={searchEnabled}
+                onCheckedChange={setSearchEnabled}
+                disabled={generating}
+                className="scale-75"
+              />
+              <Label
+                htmlFor="search-kb"
+                className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1"
+              >
+                <Search className="size-3" />
+                搜索知识库
+              </Label>
+            </div>
+
+            {/* 切换搜索结果面板 */}
+            {hasSearchContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground gap-1"
+                onClick={() => setSearchPanelOpen(!searchPanelOpen)}
+              >
+                {searchPanelOpen ? (
+                  <PanelRightClose className="size-3.5" />
+                ) : (
+                  <PanelRightOpen className="size-3.5" />
+                )}
+                {searchPanelOpen ? '隐藏' : '搜索结果'}
+                {searchResults.length > 0 && (
+                  <span className="text-primary">({searchResults.length})</span>
+                )}
+              </Button>
+            )}
           </div>
 
           <ChatInput
@@ -150,6 +173,47 @@ export default function ChatPage() {
             generating={generating}
           />
         </div>
+      </div>
+
+      {/* ======== 右侧：搜索结果面板（可折叠） ======== */}
+      <div
+        className={cn(
+          'border rounded-lg bg-card overflow-hidden flex flex-col transition-all duration-300',
+          searchPanelOpen && hasSearchContent
+            ? 'w-[280px] shrink-0 opacity-100'
+            : 'w-0 border-0 opacity-0 overflow-hidden',
+        )}
+      >
+        {searchPanelOpen && hasSearchContent && (
+          <>
+            {/* 面板标题 */}
+            <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
+              <span className="text-sm font-medium flex items-center gap-1.5">
+                <Search className="size-3.5" />
+                搜索结果
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                onClick={() => setSearchPanelOpen(false)}
+              >
+                <PanelRightClose className="size-3.5" />
+              </Button>
+            </div>
+
+            {/* 结果内容 */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <SearchResults
+                results={searchResults}
+                loading={isSearching}
+                query={searchQuery}
+                onSelect={handleSelectNote}
+                compact
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
