@@ -122,7 +122,7 @@ async def import_file(
 
     # ---- 4. 创建笔记 ----
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    note = note_service.create(
+    note = await note_service.create(
         db,
         title=parsed.title,
         content=parsed.content,
@@ -138,17 +138,20 @@ async def import_file(
     db.commit()
     db.refresh(note)
 
-    # ---- 5. 自动向量化 ----
-    synced = False
-    try:
-        await rag_engine.index_note(note.id, note.title, note.content)
-        from datetime import datetime, timezone
-        note.last_synced_at = datetime.now(timezone.utc)
-        db.commit()
-        synced = True
-        logger.info(f"导入笔记 {note.id} 已自动同步到向量库")
-    except Exception as e:
-        logger.error(f"导入时向量化失败 — 笔记 {note.id}: {e}")
+    # ---- 5. 自动向量化（note_service.create 已做，这里确认同步状态） ----
+    synced = note.last_synced_at is not None
+    if not synced:
+        # note_service.create 中的向量化如果失败了，这里重试一次
+        try:
+            await rag_engine.index_note(note.id, note.title, note.content)
+            from datetime import datetime, timezone
+            note.last_synced_at = datetime.now(timezone.utc)
+            note.content_hash = Note.compute_content_hash(parsed.content)
+            db.commit()
+            synced = True
+            logger.info(f"导入笔记 {note.id} 重试向量化成功")
+        except Exception as e:
+            logger.error(f"导入时向量化失败 — 笔记 {note.id}: {e}")
         # 向量化失败不阻止导入，后续可手动同步
 
     # ---- 6. 清理（可选：保留文件用于后续重新同步） ----
@@ -215,7 +218,7 @@ async def import_from_path(
         raise HTTPException(status_code=400, detail="解析后内容为空")
 
     # ---- 3. 创建笔记 ----
-    note = note_service.create(
+    note = await note_service.create(
         db,
         title=parsed.title,
         content=parsed.content,
@@ -230,16 +233,18 @@ async def import_from_path(
     db.commit()
     db.refresh(note)
 
-    # ---- 4. 自动向量化 ----
-    synced = False
-    try:
-        await rag_engine.index_note(note.id, note.title, note.content)
-        from datetime import datetime, timezone
-        note.last_synced_at = datetime.now(timezone.utc)
-        db.commit()
-        synced = True
-    except Exception as e:
-        logger.error(f"导入时向量化失败 — 笔记 {note.id}: {e}")
+    # ---- 4. 自动向量化（note_service.create 已做，这里确认同步状态） ----
+    synced = note.last_synced_at is not None
+    if not synced:
+        try:
+            await rag_engine.index_note(note.id, note.title, note.content)
+            from datetime import datetime, timezone
+            note.last_synced_at = datetime.now(timezone.utc)
+            note.content_hash = Note.compute_content_hash(parsed.content)
+            db.commit()
+            synced = True
+        except Exception as e:
+            logger.error(f"导入时向量化失败 — 笔记 {note.id}: {e}")
 
     return {
         "note": note.to_dict(include_content=True),

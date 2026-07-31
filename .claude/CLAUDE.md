@@ -29,23 +29,36 @@
 | 项目 | 值 |
 |------|-----|
 | 已完成阶段 | P1 基础通信 ✅, P2 笔记系统 ✅ |
-| 已完成 P3 子任务 | 3.1.1 Embedding ✅, 3.1.2 RAG 引擎 ✅ |
-| 当前阶段 | **P3 — 文档导入 + 增量同步** |
-| 当前任务 | S1: Note 模型扩展 |
+| 已完成 P3 子任务 | 3.1.1~3.1.5 向量存储闭环 ✅, 3.2.1 语义搜索 API ✅, 前端搜索 API 客户端 ✅ |
+| 当前阶段 | **P3 — 文档导入 + RAG 笔记检索** |
+| 当前任务 | 3.2.3 混合检索 + 3.3 前端搜索 UI |
 | GitHub | https://github.com/Mcloseyb/ai-second-brain |
-| 上次会话 | 2026-07-31，完成 Embedding + RAG 引擎 + 方案重设计 |
+| 上次会话 | 2026-07-31，P3.1.3~3.2.1 完成：笔记自动向量化闭环 + 语义搜索端点 |
+
+### 前端重构完成
+
+| 项目 | 值 |
+|------|-----|
+| 框架 | React 18 + TypeScript + Vite |
+| UI | Tailwind CSS + shadcn/ui (Radix) |
+| 状态管理 | Zustand (theme/notes/chat) |
+| 编辑器 | Vditor (React 封装) |
+| 图谱 | ECharts (echarts-for-react) |
+| 图标 | lucide-react |
+| 构建输出 | `frontend/dist/` |
+| 开发命令 | `cd frontend && npm run dev` |
 
 ### P3 重规划要点
 
 | 决策 | 选择 |
 |------|------|
+| P3 范围 | 文档导入 + 增量同步 + RAG 语义检索（三合一） |
 | 文件来源 | 导入模式（存 DB）+ 文件引用模式（存路径），两种并存 |
 | 文档格式 | md / docx / pdf → 清洗为 Markdown 存储 |
 | 文件夹 | Note.folder 字符串路径，如 `"AI/Agent"` |
-| 标签推荐 | jieba TF-IDF + Embedding 匹配（零 LLM token） |
-| MD 编辑器 | Vditor (QWebEngine 嵌入) 替换 QTextEdit |
-| 变更检测 | MD5 哈希对比，只同步修改过的笔记 |
+| 向量同步 | MD5 哈希对比，create/update/delete 自动同步，启动时批量索引 |
 | 同步触发 | 导入时立即 / 每 30min 定时 / 手动按钮 |
+| 语义搜索 | POST /api/notes/search，ChromaDB 余弦相似度，返回 Top-K + 分数 |
 
 ### 恢复工作命令
 
@@ -70,11 +83,10 @@ python desktop\main.py
 
 ```
 P1 ✅  基础通信         P2 ✅  笔记系统
-P3 ⏳  文档导入+同步     P3.5 ⏳ 标签推荐+MD编辑器升级
-P4 ⏳  Tag Agent        P5 ⏳  Link Agent
-P6 ⏳  Quiz Agent       P7 ⏳  知识图谱
-P8 ⏳  Review Agent     P9 ⏳  打包 .exe
-P? ⏳  Research Agent   P? ⏳  Knowledge Agent
+P3 ⏳  文档导入+RAG检索  P4 ⏳  AI 自动标签
+P5 ⏳  Link Agent       P6 ⏳  Quiz Agent
+P7 ⏳  知识图谱          P8 ⏳  知识回顾
+P9 ⏳  打包 .exe         P? ⏳  Research / Knowledge Agent
 ```
 
 ---
@@ -101,7 +113,7 @@ P? ⏳  Research Agent   P? ⏳  Knowledge Agent
 | **英文名** | AI Second Brain — Collaborative Knowledge Management |
 | **项目代号** | `ai-second-brain` |
 | **项目根目录** | `H:\agent` |
-| **Git 仓库** | 待创建 |
+| **Git 仓库** | https://github.com/Mcloseyb/ai-second-brain |
 | **开发模式** | 渐进式 — 8 个阶段，每阶段独立可运行 |
 
 ---
@@ -119,50 +131,72 @@ P? ⏳  Research Agent   P? ⏳  Knowledge Agent
 ## 3. 架构总览
 
 ```
-┌─────────────────────────────────────────────────┐
-│            PySide6 桌面客户端（前端）              │
-│  4 个页面：智能笔记 | 知识问答 | 深度研究 | 看板  │
-│  Qt Designer 拖界面 + httpx 异步调 API           │
-└──────────────────┬──────────────────────────────┘
-                   │ HTTP REST + SSE (httpx)
-┌──────────────────┴──────────────────────────────┐
-│               FastAPI 后端 (本地嵌入式)            │
-│  ├─ api/     路由层（REST + SSE 流式）           │
-│  ├─ core/    LLM / RAG / Memory 核心引擎        │
-│  ├─ agents/  多 Agent 定义与编排                 │
-│  ├─ tools/   工具集（搜索/计算/文件）             │
-│  ├─ models/  SQLAlchemy ORM 模型                │
-│  └─ services/ 业务服务层                         │
-└──────────────────┬──────────────────────────────┘
-                   │
-┌──────────────────┴──────────────────────────────┐
-│                 数据层 (嵌入式)                    │
-│  ├─ SQLite     结构化数据（笔记/用户/对话）        │
-│  ├─ ChromaDB   向量数据（文档索引）               │
-│  └─ 文件系统    原始文件存储                      │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│              PySide6 桌面壳（WebView 容器）                   │
+│  仅负责: 窗口外壳 + QWebEngineView + Qt↔JS 桥接             │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ 加载 React 前端
+┌──────────────────────┴──────────────────────────────────────┐
+│          React 18 + TypeScript + Tailwind (前端)             │
+│                                                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │ 智能笔记  │ │ 知识问答  │ │ 深度研究  │ │ 数据看板  │      │
+│  │ Vditor   │ │ SSE 流式  │ │多Agent   │ │知识图谱   │      │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
+│                                                              │
+│  通信层：Axios HTTP + SSE                                    │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ HTTP (localhost:8000)
+┌──────────────────────┴──────────────────────────────────────┐
+│               FastAPI 后端 (本地嵌入式)                       │
+│  ├─ api/     路由层（REST + SSE 流式）                      │
+│  ├─ core/    LLM / RAG / Memory 核心引擎                   │
+│  ├─ agents/  多 Agent 定义与编排（待实现）                  │
+│  ├─ tools/   工具集（待实现）                               │
+│  ├─ models/  SQLAlchemy ORM 模型                           │
+│  └─ services/ 业务服务层                                    │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+┌──────────────────────┴──────────────────────────────────────┐
+│                 数据层 (嵌入式)                               │
+│  ├─ SQLite     结构化数据（笔记/用户/对话）                  │
+│  ├─ ChromaDB   向量数据（文档索引）                          │
+│  └─ 文件系统    原始文件存储                                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**核心特性**：前端（PySide6）和后端（FastAPI）通过 HTTP 通信，完全解耦。
-如果以后要换成 React 前端或 Web 版，后端一行代码不用改。
+**核心特性**：前端（React）与后端（FastAPI）通过 HTTP 完全解耦。
+同一套前端代码可复用到 Electron 或 Web 版，后端一行代码不用改。
 
 ---
 
 ## 4. 技术栈（锁定版本）
 
-### 桌面 UI（PySide6）
+### 桌面壳（PySide6 WebView）
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| PySide6 | 6.6+ | Qt for Python，桌面 UI 框架 |
-| PySide6-WebEngine | 6.6+ | 内嵌浏览器（知识图谱用 ECharts） |
-| Qt Designer | 自带 | 可视化拖拽 UI 设计 |
-| httpx | 0.27+ | 异步 HTTP 客户端（调用后端 API） |
+| PySide6 | 6.6+ | Qt for Python，窗口框架 |
+| PySide6-WebEngine | 6.6+ | QWebEngineView 内嵌浏览器，加载 React 前端 |
 | qasync | 0.27+ | Qt 事件循环与 asyncio 桥接 |
+| httpx | 0.27+ | 异步 HTTP 客户端（bridge.py 调用后端） |
+
+### 前端（React）
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| React | 18.x | UI 框架 |
+| TypeScript | 5.6+ | 类型安全 |
+| Vite | 5.4+ | 构建工具 |
+| Tailwind CSS | 3.4+ | 原子化 CSS |
+| shadcn/ui | latest | Radix UI 组件库 |
+| Vditor | 3.10+ | Markdown 编辑器 |
+| ECharts | 5.5+ | 知识图谱可视化 |
+| Zustand | 4.5+ | 状态管理 |
+| Axios | 1.7+ | HTTP 客户端 |
 
 ### 后端（FastAPI）
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Python | 3.9.0（已安装） | 后端语言 |
+| Python | 3.12.x (64-bit) | 后端语言 |
 | FastAPI | 0.111+ | 异步 Web API 框架 |
 | SQLAlchemy | 2.0 | ORM |
 | Alembic | 1.13 | 数据库迁移 |
@@ -274,38 +308,46 @@ H:\agent\                              # 项目根目录
 │   ├── Dockerfile                     # 后端容器
 │   └── .env.example                   # 环境变量模板
 │
-├── desktop\                           # PySide6 桌面客户端
+├── frontend\                          # React 前端（Vite + TypeScript）
+│   ├── src\
+│   │   ├── main.tsx                   # React 入口
+│   │   ├── App.tsx                    # 根布局（侧边栏 + 内容区）
+│   │   ├── router\index.tsx           # 路由（4 个页面，Hash 模式）
+│   │   ├── pages\                     # 4 个页面
+│   │   │   ├── NotesPage.tsx          # 智能笔记（Vditor 编辑器）
+│   │   │   ├── ChatPage.tsx           # 知识问答（SSE 流式）
+│   │   │   ├── ResearchPage.tsx       # 深度研究（Agent 进度）
+│   │   │   └── DashboardPage.tsx      # 数据看板（图谱+统计）
+│   │   ├── components\                # 可复用组件
+│   │   │   ├── ui\                    # shadcn/ui 组件库 (16 个)
+│   │   │   ├── notes\                 # VditorEditor, NoteList
+│   │   │   ├── chat\                  # ChatBubble, ChatInput, ConversationList
+│   │   │   ├── documents\             # FileDropZone
+│   │   │   ├── agents\                # AgentProgress
+│   │   │   └── dashboard\             # StatCard, KnowledgeGraph
+│   │   ├── stores\                    # Zustand 状态管理
+│   │   │   ├── notes.ts              # 笔记 CRUD + 导入 + 同步
+│   │   │   ├── chat.ts               # 对话 + SSE 流式
+│   │   │   └── theme.ts              # 深色/浅色主题
+│   │   ├── lib\                       # 工具库
+│   │   │   ├── api.ts                # Axios HTTP 客户端
+│   │   │   ├── sse.ts                # SSE 流式客户端
+│   │   │   └── bridge.ts             # Qt WebChannel 桥接
+│   │   ├── hooks\                     # useBridge, useDebounce
+│   │   └── types\index.ts            # TypeScript 类型定义
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── dist\                          # 构建输出（生产模式）
+│
+├── desktop\                           # PySide6 桌面壳（WebView 容器）
 │   ├── __init__.py
-│   ├── main.py                        # 桌面应用入口
-│   ├── main_window.py                 # 主窗口（Tab 切换）
-│   │
-│   ├── pages\                         # 4 个页面
-│   │   ├── __init__.py
-│   │   ├── notes_page.py              # 智能笔记页
-│   │   ├── chat_page.py               # 知识问答页
-│   │   ├── research_page.py           # 深度研究页
-│   │   └── dashboard_page.py          # 个人看板页
-│   │
-│   ├── widgets\                       # 自定义组件
-│   │   ├── __init__.py
-│   │   ├── markdown_editor.py         # Markdown 编辑器
-│   │   ├── chat_bubble.py             # 聊天气泡
-│   │   ├── agent_status.py            # Agent 状态显示
-│   │   ├── note_tree.py               # 笔记树形列表
-│   │   ├── tag_cloud.py               # 标签云
-│   │   └── knowledge_graph.py         # 知识图谱（ECharts）
-│   │
+│   ├── main.py                        # 应用入口 + 后端进程管理
+│   ├── main_window.py                 # QWebEngineView 容器窗口
+│   ├── bridge.py                      # Qt↔JS 通信桥（文件选择/窗口控制）
 │   ├── services\                      # API 调用封装
 │   │   ├── __init__.py
 │   │   ├── api_client.py              # httpx 异步客户端封装
 │   │   └── sse_client.py              # SSE 流式客户端
-│   │
-│   ├── resources\                     # UI 资源
-│   │   ├── icons\                     # 图标
-│   │   ├── styles\                    # QSS 样式表
-│   │   │   └── theme.qss              # 主主题
-│   │   └── ui_files\                  # Qt Designer .ui 文件
-│   │
 │   └── requirements.txt               # 桌面端依赖
 │
 ├── scripts\                           # 工具脚本
@@ -348,13 +390,17 @@ H:\agent\                              # 项目根目录
 - **数据库操作**: 通过 Service 层，API 路由不直接操作 ORM
 - **分页**: 列表接口必须支持分页（offset/limit）
 
-### 桌面端（PySide6）规范
-- **UI 与逻辑分离**: `.ui` 文件通过 Qt Designer 设计，Python 中 load 后绑定逻辑
-- **信号槽命名**: `on_<widget>_<signal>` 格式，如 `on_send_btn_clicked`
+### 桌面壳（PySide6）规范
+- **WebView 优先**: 所有 UI 由 React 前端渲染，PySide6 仅提供窗口 + WebEngine 容器
+- **桥接通信**: Qt↔JS 通过 QWebChannel 通信，bridge.py 暴露 Slot 方法给前端调用
 - **异步 UI**: 所有网络请求用 `httpx.AsyncClient` + `qasync`，禁止阻塞主线程
-- **长耗时操作**: 使用 `QThread` 或 `asyncio.create_task`，禁止在主线程等待
-- **QSS 主题**: 样式统一写在 `theme.qss`，不散落在代码中
-- **API 调用**: 统一通过 `desktop/services/api_client.py` 发请求，不直接调 httpx
+
+### 前端（React + TypeScript）规范
+- **组件拆分**: 页面 → 组件 → UI 原子（shadcn/ui），每层职责清晰
+- **状态管理**: Zustand store 按领域拆分（notes/chat/theme），不跨域混用
+- **API 调用**: 统一通过 `lib/api.ts` 的 Axios 实例，SSE 通过 `lib/sse.ts`
+- **类型定义**: 所有 API 响应在 `types/index.ts` 中有对应接口
+- **主题**: Tailwind CSS 变量 + `dark` class 切换，无 QSS
 
 ### 通用
 - **注释语言**: 注释用中文，函数名/变量名用英文
@@ -392,7 +438,7 @@ H:\agent\                              # 项目根目录
 |------|--------|------|
 | Chunk Size | 500 tokens | 文档切片大小 |
 | Chunk Overlap | 50 tokens | 切片重叠量 |
-| Embedding 模型 | `text-embedding-3-small` | 向量化模型 |
+| Embedding 模型 | `BAAI/bge-large-zh-v1.5` (SiliconFlow) | 向量化模型 (1024 维) |
 | Top-K 检索 | 5 | 返回最相关片段数 |
 | 相似度阈值 | 0.70 | 低于此值不召回 |
 | 混合检索权重 | 语义 0.7 + BM25 0.3 | 加权融合 |
@@ -520,9 +566,9 @@ PORT=8000
 │  └──────┬──────┘  └──────────────┘  └──────────────────────┘     │
 ├─────────┼────────────────────────────────────────────────────────┤
 │         │          数据流水线 Data Pipeline (串行)                 │
-│         ├──────► Import Agent (P3) ──► 导入+向量化                │
-│         ├──────► Tag Agent   (P3.5) ──► 推荐标签+去重             │
-│         └──────► Link Agent  (P5)   ──► 双向链接+相似度            │
+│         ├──────► Import Agent (P3) ──► 导入+向量化+搜索         │
+│         ├──────► Tag Agent   (P4) ──► 推荐标签+去重              │
+│         └──────► Link Agent  (P5) ──► 双向链接+相似度             │
 ├──────────────────────────────────────────────────────────────────┤
 │                    上层应用 Application Layer (按需)               │
 │  ┌──────────────┐  ┌────────────┐  ┌────────────┐  ┌───────────┐ │
@@ -540,15 +586,17 @@ PORT=8000
 |------|-----|
 | 触发 | 用户在聊天页面发送消息 |
 | 输入 | 消息文本 + 对话历史（滑动窗口 20 轮） |
-| 工具 | 无（纯 LLM 回复）；P3 后可接入 RAG |
+| 工具 | 无（纯 LLM 回复）；RAG API 已就绪（POST /api/notes/search），前端接入待做 |
 | 输出 | SSE 流式回复 |
 | LLM | `deepseek-chat`（默认） |
 | Token | 中（~1K-4K/轮） |
 | 文件 | `core/llm.py`, `api/chat.py` |
 
-#### Import Agent（导入助手）— P3 进行中
+#### Import Agent（导入助手）— P3 ✅ (导入+同步部分)
+
 | 属性 | 值 |
 |------|-----|
+| 状态 | ✅ 文件上传/路径导入/解析/自动向量化/定时同步 — 已全部实现 |
 | 触发 | 用户导入文件（上传或拖入） |
 | 输入 | 文件路径 / 文件字节 + 文件名 |
 | 工具 | `DocumentParser（md/docx/pdf→Markdown）`, `EmbeddingService`, `RAGEngine.index_note()` |
@@ -557,8 +605,12 @@ PORT=8000
 | 文件 | `core/document_parser.py`, `api/documents.py`, `services/sync_service.py` |
 | 审计日志 | 文件名、格式、解析耗时、字数、向量化结果 |
 
-#### Tag Agent（标签管家）— P3.5（简易）/ P4（完整）
-| 属性 | P3.5 简易版 | P4 完整版 |
+> P3 剩余: 混合检索 (3.2.3) + 前端搜索 UI (3.3.1/3.3.2)
+
+#### Tag Agent（标签管家）— P4
+
+> P4 分两阶段：简易版（jieba TF-IDF + Embedding，零 LLM token）→ 完整版（Function Calling + LLM）
+| 属性 | 简易版（P4 第一阶段） | 完整版（P4 第二阶段） |
 |------|------------|----------|
 | 触发 | Import Agent 完成后自动 | 手动点击"AI 打标签" |
 | 输入 | 笔记内容 + 已有标签列表 | 笔记内容 + 已有标签体系 |
@@ -656,7 +708,7 @@ class AgentOutput:
 
 | 场景 | 调度方式 | Agent 序列 |
 |------|---------|-----------|
-| 用户导入文件 | LangGraph 串行流水线 | Import → Tag (P3.5) → Link (P5) |
+| 用户导入文件 | LangGraph 串行流水线 | Import (P3) → Tag (P4) → Link (P5) |
 | 用户手动打标签 | 单独触发 | Tag Agent 独立运行 |
 | 用户点击"出题" | 单独触发 | Quiz Agent 独立运行 |
 | 用户提交深度研究 | LangGraph 条件图 | Retriever → Analyst → Writer → Reviewer（含条件回退） |
@@ -665,9 +717,9 @@ class AgentOutput:
 ### 13.7 开发优先级
 
 ```
-当前 P3:  Import Agent（数据流水线第一环，零 LLM token）
-下一步:   Tag Agent P3.5（简易版，零 token）
-之后:     Chat Agent 接入 RAG（基于已索引的向量库）
-          Link Agent P5
+当前 P3:  文档导入 + RAG 检索（导入/同步/搜索已完成，剩余混合检索+前端UI）
+下一步:   P4 AI 自动标签（简易版 jieba TF-IDF，零 token）
+之后:     P5 智能双向链接（基于已索引的向量库）
+          P6 Quiz Agent → P7 知识图谱 → P8 回顾总结
           上层 Agent 按需开发
 ```

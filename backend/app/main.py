@@ -6,6 +6,7 @@ FastAPI 应用入口
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +43,39 @@ async def lifespan(app: FastAPI):
     logger.info(f"📁 数据库: {settings.database_path}")
     logger.info(f"📁 ChromaDB: {settings.chroma_path}")
     logger.info(f"📁 上传目录: {settings.upload_path}")
+
+    # P3.1.5: 启动时自动索引未同步的笔记
+    try:
+        from app.database import SessionLocal
+        from app.models.note import Note
+        from app.core.rag_engine import rag_engine
+
+        db = SessionLocal()
+        try:
+            all_notes = db.query(Note).all()
+            unindexed = [
+                n for n in all_notes
+                if n.content and n.content.strip() and n.last_synced_at is None
+            ]
+            if unindexed:
+                logger.info(f"🔍 发现 {len(unindexed)} 篇未索引笔记，开始批量向量化...")
+                indexed = 0
+                for note in unindexed:
+                    try:
+                        await rag_engine.index_note(note.id, note.title, note.content)
+                        note.content_hash = Note.compute_content_hash(note.content)
+                        note.last_synced_at = datetime.now(timezone.utc)
+                        indexed += 1
+                    except Exception as e:
+                        logger.warning(f"索引笔记 {note.id} 失败: {e}")
+                db.commit()
+                logger.info(f"✅ 启动索引完成: {indexed}/{len(unindexed)} 篇")
+            else:
+                logger.info(f"✅ 所有笔记已索引 ({len(all_notes)} 篇)")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"启动索引失败（不影响正常使用）: {e}")
 
     # 初始化后台同步状态
     app.state.auto_sync_enabled = False

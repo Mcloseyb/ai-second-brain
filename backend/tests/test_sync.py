@@ -38,19 +38,18 @@ async def main():
         print("\n📝 准备: 创建测试笔记")
         print("-" * 40)
         for title, content in TEST_NOTES:
-            note = note_service.create(db, title=title, content=content)
-            print(f"  ✓ 笔记 {note.id}: {title}")
+            note = await note_service.create(db, title=title, content=content)
+            print(f"  OK 笔记 {note.id}: {title}")
 
-        # ---- 测试 1: 首次全量同步 ----
-        print("\n📝 测试 1: 首次全量同步")
+        # ---- 测试 1: 首次全量同步（create 已自动同步，应全部跳过） ----
+        print("\n📝 测试 1: 首次全量同步（create 已自动索引）")
         print("-" * 40)
         report = await sync_service.sync_all(db)
         print(f"  total={report.total} synced={report.synced} skipped={report.skipped} failed={report.failed}")
-        assert report.synced == 3, f"首次同步应全部 synced，实际 {report.synced}"
-        assert report.skipped == 0
+        assert report.skipped == 3, f"create 已同步，sync_all 应全部 skipped，实际 synced={report.synced} skipped={report.skipped}"
         assert report.failed == 0
         assert rag_engine.count() == 3, f"ChromaDB 应有 3 条，实际 {rag_engine.count()}"
-        print("  ✅ 3 篇全部同步到向量库")
+        print("  OK 3 篇已由 create 自动索引")
 
         # ---- 测试 2: 无变更时跳过 ----
         print("\n📝 测试 2: 再次同步（无变更 → 全部跳过）")
@@ -61,19 +60,17 @@ async def main():
         assert report2.synced == 0
         print("  ✅ 3 篇全部跳过（内容未变化）")
 
-        # ---- 测试 3: 修改后增量同步 ----
-        print("\n📝 测试 3: 修改笔记 → 增量同步")
+        # ---- 测试 3: 修改后增量同步（update 已自动同步） ----
+        print("\n📝 测试 3: 修改笔记 → update 自动同步")
         print("-" * 40)
         # 修改笔记 1
         note1 = note_service.get_by_id(db, 1)
         old_hash = note1.content_hash
-        note_service.update(db, 1, content="# Transformer 详解\n\n新增内容：多头注意力的数学原理。")
-        db.commit()
+        await note_service.update(db, 1, content="# Transformer 详解\n\n新增内容：多头注意力的数学原理。")
 
         report3 = await sync_service.sync_all(db)
         print(f"  total={report3.total} synced={report3.synced} skipped={report3.skipped} failed={report3.failed}")
-        assert report3.synced == 1, f"应只有 1 篇更新，实际 {report3.synced}"
-        assert report3.skipped == 2, f"应跳过 2 篇未变更，实际 {report3.skipped}"
+        assert report3.skipped == 3, f"update 已自动同步，sync_all 应全部 skipped，实际 synced={report3.synced} skipped={report3.skipped}"
 
         # 验证 hash 已更新
         db.refresh(note1)
