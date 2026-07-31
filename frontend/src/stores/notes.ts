@@ -29,6 +29,14 @@ interface NotesState {
   deleteNote: (id: number) => Promise<void>
   moveNote: (noteId: number, folder: string) => Promise<void>
   importFile: (file: File) => Promise<unknown>
+  /** 导入到指定笔记库/文件夹（导入后刷新文件夹树并选中新笔记） */
+  importNoteToFolder: (
+    file: File,
+    notebookId: number,
+    folder: string,
+    tags: string,
+    title: string,
+  ) => Promise<{ noteId: number | null }>
   syncNow: () => Promise<SyncReport>
 
   // Actions — 笔记库
@@ -127,6 +135,15 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     const res = await documentsApi.import(file)
     await get().fetchNotes()
     return res
+  },
+
+  importNoteToFolder: async (file, notebookId, folder, tags, title) => {
+    const res = await documentsApi.import(file, folder, tags, notebookId, title)
+    // 刷新文件夹树，让新笔记出现在目标文件夹
+    await get().fetchFolderTree()
+    const noteId = res.note?.id ?? null
+    if (noteId != null) set({ selectedId: noteId })
+    return { noteId }
   },
 
   syncNow: async () => {

@@ -313,6 +313,20 @@ export interface ImportResponse {
   synced: boolean
 }
 
+/** 文档解析结果（导入对话框预填标题 / AI 标签推荐用，不创建笔记） */
+export interface DocumentParseResponse {
+  title: string
+  content: string
+  source_type: string
+  word_count: number
+}
+
+/** 内容标签推荐（导入对话框，先推荐后导入） */
+export interface SuggestTagsResponse {
+  mode: 'simple' | 'llm'
+  suggestions: TagSuggestion[]
+}
+
 // ---- Search types (P3) ----
 
 export interface NoteSearchResult {

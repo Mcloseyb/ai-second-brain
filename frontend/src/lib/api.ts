@@ -26,6 +26,8 @@ import type {
   SyncNowResponse,
   PendingSyncResponse,
   ImportResponse,
+  DocumentParseResponse,
+  SuggestTagsResponse,
   Notebook,
   FolderTreeResponse,
   QuizGenerateResponse,
@@ -91,6 +93,10 @@ export const notesApi = {
   /** AI 自动标签推荐（P4）: mode=simple 简易版(零token) / mode=llm 完整版(Function Calling) */
   autoTag: (noteId: number, mode: 'simple' | 'llm' = 'simple') =>
     client.post(`/api/notes/${noteId}/auto-tag`, null, { params: { mode } }) as Promise<AutoTagResponse>,
+
+  /** 内容标签推荐（导入对话框用，无需先创建笔记） */
+  suggestTags: (data: { title: string; content: string }) =>
+    client.post('/api/notes/suggest-tags', data) as Promise<SuggestTagsResponse>,
 
   /** 语义相关笔记（P5 双向链接） */
   related: (noteId: number, topK = 5) =>
@@ -209,19 +215,30 @@ export const documentsApi = {
    * @param file 文件对象
    * @param folder 目标文件夹
    * @param tags 逗号分隔标签
+   * @param notebookId 目标笔记库 ID（必须，否则笔记不在文件夹树中显示）
+   * @param title 标题覆盖（留空则从文件自动解析）
    */
-  import: (file: File, folder = '', tags = '') => {
+  import: (file: File, folder = '', tags = '', notebookId?: number | null, title = '') => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('folder', folder)
     formData.append('tags', tags)
+    if (notebookId != null) formData.append('notebook_id', String(notebookId))
+    if (title) formData.append('title', title)
     // 不手动设置 Content-Type，浏览器自动加 multipart boundary
     return client.post('/api/documents/import', formData, { timeout: 120000 }) as Promise<ImportResponse>
   },
 
+  /** 解析文件返回标题/内容（不创建笔记，供导入对话框预填标题 + AI 标签推荐） */
+  parse: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return client.post('/api/documents/parse', formData, { timeout: 60000 }) as Promise<DocumentParseResponse>
+  },
+
   /** 从本地路径导入 */
-  importFromPath: (filePath: string, folder = '', tags: string[] = []) =>
-    client.post('/api/documents/import-from-path', { file_path: filePath, folder, tags }) as Promise<ImportResponse>,
+  importFromPath: (filePath: string, folder = '', tags: string[] = [], notebookId?: number | null, title = '') =>
+    client.post('/api/documents/import-from-path', { file_path: filePath, folder, tags, notebook_id: notebookId, title }) as Promise<ImportResponse>,
 }
 
 // ============================================================

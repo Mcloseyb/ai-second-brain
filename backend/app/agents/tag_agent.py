@@ -119,6 +119,36 @@ class TagAgent:
         )
         return result
 
+    async def suggest_tags_for_text(self, db: Session, title: str, content: str) -> list[dict]:
+        """
+        为尚未创建的笔记内容推荐标签（导入对话框用：先推荐后导入）
+
+        与 suggest_tags 逻辑一致（简易版 jieba TF-IDF + Embedding），
+        区别: 不排除任何已有标签（新笔记还未打标签），直接对全部已有标签匹配。
+
+        Returns:
+            list[dict]: 标签建议列表（已排序，最多 TOP_TAGS 条）
+        """
+        text = f"{title or ''}\n{content or ''}".strip()
+        if not text:
+            logger.info("内容为空，跳过标签推荐")
+            return []
+
+        keywords = self._extract_keywords(text)
+        if not keywords:
+            logger.info("未提取到关键词")
+            return []
+
+        existing_tags = db.query(Tag).order_by(Tag.created_at.asc()).all()
+        suggestions = await self._match_keywords(keywords, existing_tags)
+        if not suggestions:
+            logger.warning("标签匹配失败（Embedding 可能不可用）")
+            return []
+
+        result = self._dedupe(suggestions)[:TOP_TAGS]
+        logger.info(f"内容标签推荐 {len(result)} 个: {', '.join(s['tag'] for s in result)}")
+        return result
+
     # ============================================================
     # 关键词提取
     # ============================================================

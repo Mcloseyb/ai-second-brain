@@ -12,8 +12,9 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Plus, Search, FileText, Folder, FolderOpen,
-  ChevronRight, ChevronDown, Library,
+  ChevronRight, ChevronDown, Library, Upload,
 } from 'lucide-react'
+import UploadNoteDialog from '@/components/notes/UploadNoteDialog'
 import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger,
@@ -79,6 +80,15 @@ export default function NoteList() {
   const [newFolderMode, setNewFolderMode] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [newFolderParent, setNewFolderParent] = useState('')
+
+  // ---- 上传笔记对话框（加号菜单 + 文件夹右键） ----
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadFolder, setUploadFolder] = useState('')
+
+  const openUpload = (folder = '') => {
+    setUploadFolder(folder)
+    setUploadOpen(true)
+  }
 
   useEffect(() => { fetchNotebooks() }, [])
 
@@ -196,6 +206,7 @@ export default function NoteList() {
         <ContextMenu items={[
           { label: '在此新建笔记', onClick: () => handleNewNote(folder.path) },
           { label: '新建子文件夹', onClick: () => handleCreateFolder(folder.path) },
+          { label: '在此上传笔记', onClick: () => openUpload(folder.path) },
           { label: '重命名', onClick: () => handleRenameFolder(folder.path) },
           { label: '删除文件夹', onClick: () => handleDeleteFolder(folder), danger: true },
         ]}>
@@ -288,6 +299,9 @@ export default function NoteList() {
             <DropdownMenuItem className="text-xs gap-2" onClick={() => handleCreateFolder()}>
               <Folder className="size-3.5" />新建文件夹
             </DropdownMenuItem>
+            <DropdownMenuItem className="text-xs gap-2" onClick={() => openUpload()}>
+              <Upload className="size-3.5" />上传笔记
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -333,6 +347,14 @@ export default function NoteList() {
           {activeNb.name} · {activeNb.note_count ?? 0} 篇笔记
         </div>
       )}
+
+      {/* 上传笔记对话框（加号菜单 / 文件夹右键共用） */}
+      <UploadNoteDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        folder={uploadFolder}
+        notebookId={activeNotebookId}
+      />
     </div>
   )
 }

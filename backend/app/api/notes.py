@@ -40,6 +40,12 @@ class NoteSearchRequest(BaseModel):
     hybrid: bool = Field(default=True, description="是否启用混合检索(semantic+BM25)，False 则纯语义")
 
 
+class SuggestTagsRequest(BaseModel):
+    """为尚未创建的笔记内容推荐标签（导入对话框用）"""
+    title: str = Field(default="", max_length=500)
+    content: str = Field(default="", max_length=100000)
+
+
 # ============================================================
 # Endpoints
 # ============================================================
@@ -207,6 +213,21 @@ async def auto_tag_note(
 
     suggestions = await tag_agent.suggest_tags(db, note)
     return {"note_id": note_id, "mode": "simple", "suggestions": suggestions}
+
+
+@router.post("/suggest-tags")
+async def suggest_tags_content(req: SuggestTagsRequest, db: Session = Depends(get_db)):
+    """
+    为尚未创建的笔记内容推荐标签（导入对话框用：先推荐后导入）
+
+    与 auto-tag 的 simple 版同逻辑（jieba TF-IDF + Embedding 语义匹配，零 token），
+    但不需要先创建笔记。
+
+    Returns:
+        {"mode": "simple", "suggestions": [{tag, type, tag_id, keyword, score}, ...]}
+    """
+    suggestions = await tag_agent.suggest_tags_for_text(db, req.title, req.content)
+    return {"mode": "simple", "suggestions": suggestions}
 
 
 # ============================================================

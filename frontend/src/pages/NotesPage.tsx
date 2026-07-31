@@ -11,7 +11,6 @@ import VditorEditor from '@/components/notes/VditorEditor'
 import EditorContextMenu from '@/components/notes/EditorContextMenu'
 import TagSuggestBar from '@/components/notes/TagSuggestBar'
 import RelatedNotesPanel from '@/components/notes/RelatedNotesPanel'
-import FileDropZone from '@/components/documents/FileDropZone'
 import { notesApi, tagsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +18,6 @@ import { Badge } from '@/components/ui/badge'
 import {
   Save,
   Trash2,
-  Upload,
   RefreshCw,
   NotebookPen,
   Sparkles,
@@ -35,7 +33,6 @@ export default function NotesPage() {
     fetchNote,
     updateNote,
     deleteNote,
-    importFile,
     syncNow,
   } = useNotesStore()
 
@@ -46,7 +43,6 @@ export default function NotesPage() {
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [showImport, setShowImport] = useState(false)
 
   // ---- AI 标签推荐（P4）----
   const [tagSuggestions, setTagSuggestions] = useState<TagSuggestion[]>([])
@@ -184,15 +180,6 @@ export default function NotesPage() {
     }
   }, [selectedId, deleteNote])
 
-  // ---- 导入文件 ----
-  const handleImport = useCallback(
-    async (file: File) => {
-      await importFile(file)
-      setShowImport(false)
-    },
-    [importFile],
-  )
-
   // ---- 同步到向量库 ----
   const handleSync = useCallback(async () => {
     setSyncing(true)
@@ -231,11 +218,6 @@ export default function NotesPage() {
       <div className="flex-1 min-w-0 h-full flex flex-col">
         {selectedId ? (
           <>
-            {/* 导入区域（可折叠） */}
-            {showImport && (
-              <FileDropZone onFile={handleImport} disabled={false} />
-            )}
-
             {/* 紧凑标题栏：标题 + 标签 + 操作按钮 全部在一行 */}
             <div className="flex items-center gap-1.5 shrink-0 px-1 py-0.5">
               <Input
@@ -266,9 +248,6 @@ export default function NotesPage() {
                 </div>
               )}
               <div className="w-px h-4 bg-border mx-0.5 shrink-0" />
-              <Button variant="ghost" size="icon" className="size-7" onClick={() => setShowImport(!showImport)} title="导入">
-                <Upload className="size-3.5" />
-              </Button>
               <Button variant="ghost" size="icon" className="size-7" onClick={handleSync} disabled={syncing} title="同步">
                 <RefreshCw className={`size-3.5 ${syncing ? 'animate-spin' : ''}`} />
               </Button>
@@ -332,7 +311,7 @@ export default function NotesPage() {
               <NotebookPen className="size-12 mx-auto text-muted-foreground mb-3" />
               <p className="text-muted-foreground text-sm">选择或创建一篇笔记开始编辑</p>
               <p className="text-xs text-muted-foreground mt-1">
-                支持拖拽上传 PDF、Word、Markdown 文件
+                左侧 + 或右键文件夹可上传 PDF / Word / Markdown 笔记
               </p>
             </div>
           </div>

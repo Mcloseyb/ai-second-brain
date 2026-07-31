@@ -38,6 +38,8 @@ class ImportFromPathRequest(BaseModel):
     file_path: str = Field(..., description="本地文件路径")
     folder: str = Field(default="", max_length=500, description="目标文件夹")
     tags: list[str] = Field(default_factory=list, description="初始标签")
+    notebook_id: int | None = Field(default=None, description="目标笔记库 ID")
+    title: str = Field(default="", max_length=500, description="标题覆盖（留空则从文件解析）")
 
 
 # ============================================================
@@ -49,6 +51,8 @@ async def import_file(
     file: UploadFile = File(...),
     folder: str = Form(default=""),
     tags: str = Form(default=""),
+    notebook_id: int | None = Form(default=None, description="目标笔记库 ID"),
+    title: str = Form(default="", description="标题覆盖（留空则从文件解析）"),
     db: Session = Depends(get_db),
 ):
     """
@@ -60,6 +64,8 @@ async def import_file(
         file: 上传的文件（.md/.docx/.pdf/.txt）
         folder: 目标文件夹路径，如 "AI/Agent"；空字符串 = 根目录
         tags: 逗号分隔的标签，如 "AI,Agent,ReAct"
+        notebook_id: 目标笔记库 ID（必须，否则笔记不在文件夹树中显示）
+        title: 标题覆盖；留空则从文件解析（Markdown 第一个 # 标题 / 文件名）
 
     Returns:
         { "note": {...}, "synced": true }
@@ -122,11 +128,13 @@ async def import_file(
 
     # ---- 4. 创建笔记 ----
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    final_title = title.strip() or parsed.title
     note = await note_service.create(
         db,
-        title=parsed.title,
+        title=final_title,
         content=parsed.content,
         tags=tag_list,
+        notebook_id=notebook_id,
     )
 
     # 补充导入元数据
@@ -218,11 +226,13 @@ async def import_from_path(
         raise HTTPException(status_code=400, detail="解析后内容为空")
 
     # ---- 3. 创建笔记 ----
+    final_title = req.title.strip() or parsed.title
     note = await note_service.create(
         db,
-        title=parsed.title,
+        title=final_title,
         content=parsed.content,
         tags=req.tags,
+        notebook_id=req.notebook_id,
     )
 
     note.folder = req.folder.strip()
@@ -249,4 +259,63 @@ async def import_from_path(
     return {
         "note": note.to_dict(include_content=True),
         "synced": synced,
+    }
+
+
+@router.post("/parse")
+async def parse_document(file: UploadFile = File(...)):
+    """
+    解析上传文件并返回标题与正文（不创建笔记）
+
+    供导入对话框使用: 预填标题 + 触发 AI 标签推荐（先解析再导入）。
+
+    Returns:
+        { "title": "...", "content": "...", "source_type": "md|docx|pdf", "word_count": n }
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="文件名为空")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的格式 '{ext}'，支持: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
+        )
+
+    content = await file.read()
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件超过 {settings.max_upload_size_mb}MB 限制",
+        )
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="文件内容为空")
+
+    # 写临时文件解析（docx/pdf 需要文件路径）
+    import tempfile
+
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+        parsed = await document_parser.parse_file(tmp_path)
+    except DocumentParseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"解析异常: {e}")
+        raise HTTPException(status_code=500, detail=f"文档解析失败: {e}")
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    return {
+        "title": parsed.title,
+        "content": parsed.content[:50000],
+        "source_type": parsed.source_type,
+        "word_count": parsed.word_count,
     }
