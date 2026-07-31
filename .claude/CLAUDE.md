@@ -413,6 +413,8 @@ H:\agent\                              # 项目根目录
 ### Git 提交节奏
 - 每完成一个可运行的小功能 → commit
 - 每阶段所有任务完成 → tag + push
+- **每完成一个子任务必须 commit**，保持提交历史细粒度可追溯
+- **每次 commit 后尝试 `git push`**，网络不通则记录到下一次一起推
 - 提交信息示例:
   ```
   feat(backend): 实现笔记创建 API — POST /api/notes
@@ -487,17 +489,185 @@ PORT=8000
 
 ---
 
-## 13. 全局 Agent 架构
+## 13. Agent 架构规范
 
-> **Agent ≠ LLM 对话。Agent = 有目标 + 能推理 + 能调工具 + 有记忆**
+### 13.1 核心定义
 
-| Agent | 阶段 | 能力 | Token 成本 |
-|-------|------|------|-----------|
-| **Import Agent** | P3 | 文件解析 + 推荐文件夹 + 推荐标签 + 自动向量化 | 零（规则+Embedding） |
-| **Tag Agent** | P3.5/P4 | 关键词提取 + 标签匹配 + 去重合并 + 层级建议 | 零（jieba+Embedding）→ P4 加 LLM |
-| **Link Agent** | P5 | 语义相似度 + 双向链接建议 + 知识图谱边 | 零（Embedding） |
-| **Research Agent** | P? | 多 Agent 协作（检索→分析→写作→审核），Function Calling | 高（LLM + 工具调用） |
-| **Quiz Agent** | P6 | 题目生成 + 自动批改 + 复习建议 | 中（LLM 生成） |
-| **Review Agent** | P8 | 周报总结 + 进度追踪 + 学习时间线 | 中（LLM 总结） |
-| **Chat Agent** | P1 ✅ | 基础对话 + RAG 增强 + 上下文记忆 | 中（LLM 对话） |
-| **Knowledge Agent** | P? | 知识缺口发现 + 学习路径推荐 + 概念成熟度 | 高（LLM + 深度分析） |
+> **Agent ≠ LLM 对话。Agent = 角色(System Prompt) + 工具(Tools) + 推理(ReAct Loop) + 记忆(Context Window)**
+
+每个 Agent 是一个**独立的业务处理单元**，不负责 UI、不直接操作数据库（通过 Service 层）、不越界处理其他 Agent 的职责。
+
+### 13.2 设计原则
+
+1. **专用职责拆分**：一个 Agent 只解决一类业务目标，禁止"超级 Agent"大包大揽。拆分粒度：一个 Agent = 一个业务闭环。
+2. **基础底座共享**：Chat Agent 为基础通信底座，所有其他 Agent 共享同一套基础设施：向量库（ChromaDB）、文档数据库（SQLite）、LLM 统一接口（`core/llm.py`）、Embedding 服务（`core/embedding.py`）。
+3. **执行顺序约束**：
+   - **基础数据流水线**（必须按序）: `Import Agent → Tag Agent → Link Agent`
+   - **上层应用**（按需触发）: `Research Agent` / `Quiz Agent` / `Review Agent` / `Knowledge Agent`
+   - 上层应用依赖流水线的产出（已向量化的笔记 + 标签 + 链接关系）
+4. **调度编排**：基于 LangGraph 实现 Agent 路由和多步流转。支持串行流水线（Import→Tag→Link）、并行任务（多个 Quiz 同时生成）、条件分支（按内容类型路由到不同 Agent）。
+5. **输出可审计**：每个 Agent 的执行过程记录结构化日志（日志级别 INFO），包含：Agent 名称、输入摘要、关键决策点、工具调用记录、输出摘要、耗时。方便调试和面试讲解。
+
+### 13.3 Agent 全景图
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    基础层 Base Layer                              │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────┐     │
+│  │ Chat Agent  │  │ LLM Service  │  │ 共享基础设施          │     │
+│  │ (P1 ✅)     │  │ Embedding    │  │ SQLite / ChromaDB     │     │
+│  │ 对话+上下文  │  │ RAG Engine   │  │ DocumentParser       │     │
+│  └──────┬──────┘  └──────────────┘  └──────────────────────┘     │
+├─────────┼────────────────────────────────────────────────────────┤
+│         │          数据流水线 Data Pipeline (串行)                 │
+│         ├──────► Import Agent (P3) ──► 导入+向量化                │
+│         ├──────► Tag Agent   (P3.5) ──► 推荐标签+去重             │
+│         └──────► Link Agent  (P5)   ──► 双向链接+相似度            │
+├──────────────────────────────────────────────────────────────────┤
+│                    上层应用 Application Layer (按需)               │
+│  ┌──────────────┐  ┌────────────┐  ┌────────────┐  ┌───────────┐ │
+│  │Research Agent│  │ Quiz Agent │  │Review Agent│  │Knowledge  │ │
+│  │ (P? 深度研究) │  │ (P6 出题)  │  │ (P8 回顾)  │  │Agent (P?) │ │
+│  │ 多Agent协作   │  │ 自测+批改  │  │ 周报+时间线 │  │ 缺口+路径 │ │
+│  └──────────────┘  └────────────┘  └────────────┘  └───────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 13.4 各 Agent 详细规格
+
+#### Chat Agent（基础底座）— P1 ✅
+| 属性 | 值 |
+|------|-----|
+| 触发 | 用户在聊天页面发送消息 |
+| 输入 | 消息文本 + 对话历史（滑动窗口 20 轮） |
+| 工具 | 无（纯 LLM 回复）；P3 后可接入 RAG |
+| 输出 | SSE 流式回复 |
+| LLM | `deepseek-chat`（默认） |
+| Token | 中（~1K-4K/轮） |
+| 文件 | `core/llm.py`, `api/chat.py` |
+
+#### Import Agent（导入助手）— P3 进行中
+| 属性 | 值 |
+|------|-----|
+| 触发 | 用户导入文件（上传或拖入） |
+| 输入 | 文件路径 / 文件字节 + 文件名 |
+| 工具 | `DocumentParser（md/docx/pdf→Markdown）`, `EmbeddingService`, `RAGEngine.index_note()` |
+| 输出 | 已入库的 Note + 向量已同步确认 |
+| Token | **零**（规则引擎 + Embedding API，无 LLM 调用） |
+| 文件 | `core/document_parser.py`, `api/documents.py`, `services/sync_service.py` |
+| 审计日志 | 文件名、格式、解析耗时、字数、向量化结果 |
+
+#### Tag Agent（标签管家）— P3.5（简易）/ P4（完整）
+| 属性 | P3.5 简易版 | P4 完整版 |
+|------|------------|----------|
+| 触发 | Import Agent 完成后自动 | 手动点击"AI 打标签" |
+| 输入 | 笔记内容 + 已有标签列表 | 笔记内容 + 已有标签体系 |
+| 工具 | jieba 分词 + TF-IDF + Embedding 相似度匹配 | `suggest_tags()`, `create_tag()`, `merge_tags()` |
+| 输出 | 推荐 3-5 个标签（用户确认） | 推荐 + 新标签创建 + 去重合并建议 |
+| Token | **零** | 低（~500/篇） |
+| LLM | 无 | `deepseek-chat`, temperature=0 |
+| 文件 | `agents/tag_agent.py` | `agents/tag_agent.py` + Function Calling |
+
+#### Link Agent（关联发现）— P5
+| 属性 | 值 |
+|------|-----|
+| 触发 | Tag Agent 完成后自动 |
+| 输入 | 新笔记向量 + 已有笔记向量池 |
+| 工具 | `RAGEngine.search()`, `EmbeddingService.similarity()` |
+| 输出 | Top-5 关联笔记 + 双向链接建议 |
+| Token | **零**（纯 Embedding 相似度计算） |
+| 文件 | `agents/link_agent.py` |
+
+#### Research Agent（深度研究）— P?
+| 属性 | 值 |
+|------|-----|
+| 触发 | 用户在深度研究页面提交研究主题 |
+| 输入 | 研究主题 + 参数（范围/深度） |
+| 工具 | 4 个子 Agent（Retriever/Analyst/Writer/Reviewer）各自独立工具集 |
+| 编排 | LangGraph 状态图：`Retriever → Analyst → Writer → Reviewer → 最终输出` |
+| 输出 | SSE 流式报告（逐步展示每个 Agent 的进度） |
+| Token | **高**（4 次 LLM 调用 + 工具调用） |
+| LLM | `deepseek-chat`（Retriever/Writer）, temperature=0.3（Analyst/Reviewer） |
+| 文件 | `agents/retriever.py`, `agents/analyst.py`, `agents/writer.py`, `agents/reviewer.py`, `agents/orchestrator.py` |
+
+#### Quiz Agent（出题助手）— P6
+| 属性 | 值 |
+|------|-----|
+| 触发 | 用户选中笔记 → "生成题目" |
+| 输入 | 笔记内容 + 题目类型（选择/简答） + 难度 |
+| 工具 | `generate_questions()`, `grade_answers()` |
+| 输出 | 题目列表 → 用户作答 → 批改结果 + 复习建议 |
+| Token | **中**（生成 ~500，批改 ~300） |
+| 文件 | `agents/quiz_agent.py` |
+
+#### Review Agent（回顾助手）— P8
+| 属性 | 值 |
+|------|-----|
+| 触发 | 用户点击"本周总结" / 每周定时 |
+| 输入 | 本周笔记列表 + 标签分布 + 学习时长 |
+| 工具 | `RAGEngine.search()`, LLM 总结 |
+| 输出 | 周报（学了什么 + 时间分布 + 推荐复习） |
+| Token | **中**（总结 ~1000） |
+| 文件 | `agents/review_agent.py` |
+
+#### Knowledge Agent（知识导航）— P?（暂存）
+| 属性 | 值 |
+|------|-----|
+| 触发 | 用户点击"知识分析" |
+| 输入 | 全量笔记 + 标签体系 + 学习历史 |
+| 工具 | 聚类分析、缺口检测、路径规划 |
+| 输出 | 知识缺口报告 + 推荐学习路径 + 概念成熟度评估 |
+| Token | **高**（全量分析） |
+| 文件 | `agents/knowledge_agent.py` |
+
+### 13.5 Agent 通用实现规范
+
+```python
+# 每个 Agent 的标准结构（基类: agents/base.py）
+class BaseAgent:
+    name: str                    # Agent 唯一标识
+    description: str             # 一句话描述
+    system_prompt: str           # System Prompt 模板
+    tools: list[Callable]        # 可调用的工具列表（Function Calling schema）
+    max_retries: int = 3         # 单步 Tool Call 最大重试次数
+
+    async def run(self, input: AgentInput) -> AgentOutput:
+        """执行 Agent 任务，遵循 ReAct 循环"""
+        # 1. 组装 messages: [system_prompt, ...context, user_input]
+        # 2. ReAct loop:
+        #    while not done and steps < max_steps:
+        #        response = await llm.chat(messages, tools=self.tools)
+        #        if response has tool_calls → execute → append observation
+        #        else → done = True
+        # 3. 记录审计日志
+        # 4. 返回 AgentOutput
+        ...
+
+class AgentOutput:
+    agent_name: str
+    content: str                  # 最终输出文本
+    steps: list[AgentStep]        # 执行步骤记录（审计用）
+    tool_calls: list[ToolCall]   # 工具调用记录
+    tokens_used: int              # Token 消耗统计
+    elapsed_ms: int               # 耗时（毫秒）
+```
+
+### 13.6 调度规则
+
+| 场景 | 调度方式 | Agent 序列 |
+|------|---------|-----------|
+| 用户导入文件 | LangGraph 串行流水线 | Import → Tag (P3.5) → Link (P5) |
+| 用户手动打标签 | 单独触发 | Tag Agent 独立运行 |
+| 用户点击"出题" | 单独触发 | Quiz Agent 独立运行 |
+| 用户提交深度研究 | LangGraph 条件图 | Retriever → Analyst → Writer → Reviewer（含条件回退） |
+| 每周自动总结 | 定时触发 | Review Agent |
+
+### 13.7 开发优先级
+
+```
+当前 P3:  Import Agent（数据流水线第一环，零 LLM token）
+下一步:   Tag Agent P3.5（简易版，零 token）
+之后:     Chat Agent 接入 RAG（基于已索引的向量库）
+          Link Agent P5
+          上层 Agent 按需开发
+```
