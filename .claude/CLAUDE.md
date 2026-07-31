@@ -29,10 +29,23 @@
 | 项目 | 值 |
 |------|-----|
 | 已完成阶段 | P1 基础通信 ✅, P2 笔记系统 ✅ |
-| 当前阶段 | **P3 — RAG 笔记语义检索** |
-| 当前任务 | 即将开始 P3.1: Embedding + ChromaDB |
+| 已完成 P3 子任务 | 3.1.1 Embedding ✅, 3.1.2 RAG 引擎 ✅ |
+| 当前阶段 | **P3 — 文档导入 + 增量同步** |
+| 当前任务 | S1: Note 模型扩展 |
 | GitHub | https://github.com/Mcloseyb/ai-second-brain |
-| 上次会话 | 2026-07-30，完成路线图重规划 |
+| 上次会话 | 2026-07-31，完成 Embedding + RAG 引擎 + 方案重设计 |
+
+### P3 重规划要点
+
+| 决策 | 选择 |
+|------|------|
+| 文件来源 | 导入模式（存 DB）+ 文件引用模式（存路径），两种并存 |
+| 文档格式 | md / docx / pdf → 清洗为 Markdown 存储 |
+| 文件夹 | Note.folder 字符串路径，如 `"AI/Agent"` |
+| 标签推荐 | jieba TF-IDF + Embedding 匹配（零 LLM token） |
+| MD 编辑器 | Vditor (QWebEngine 嵌入) 替换 QTextEdit |
+| 变更检测 | MD5 哈希对比，只同步修改过的笔记 |
+| 同步触发 | 导入时立即 / 每 30min 定时 / 手动按钮 |
 
 ### 恢复工作命令
 
@@ -56,11 +69,12 @@ python desktop\main.py
 ### 路线速览
 
 ```
-P1 ✅  基础通信     P2 ✅  笔记系统
-P3 ⏳  RAG 笔记检索  P4 ⏳  AI 自动标签
-P5 ⏳  智能双向链接  P6 ⏳  AI 出题自测
-P7 ⏳  知识图谱     P8 ⏳  知识回顾
-P9 ⏳  打包 .exe
+P1 ✅  基础通信         P2 ✅  笔记系统
+P3 ⏳  文档导入+同步     P3.5 ⏳ 标签推荐+MD编辑器升级
+P4 ⏳  Tag Agent        P5 ⏳  Link Agent
+P6 ⏳  Quiz Agent       P7 ⏳  知识图谱
+P8 ⏳  Review Agent     P9 ⏳  打包 .exe
+P? ⏳  Research Agent   P? ⏳  Knowledge Agent
 ```
 
 ---
@@ -451,16 +465,39 @@ PORT=8000
 
 ---
 
-## 11. 外部资源链接
+---
 
-| 资源 | 链接 |
-|------|------|
-| DeepSeek API 控制台 | https://platform.deepseek.com |
-| PySide6 官方文档 | https://doc.qt.io/qtforpython-6/ |
-| Qt Designer 教程 | https://doc.qt.io/qt-6/qtdesigner-manual.html |
-| FastAPI 文档 | https://fastapi.tiangolo.com |
-| LangChain 文档 | https://python.langchain.com |
-| LangGraph 文档 | https://langchain-ai.github.io/langgraph/ |
-| ChromaDB 文档 | https://docs.trychroma.com |
-| httpx 文档 | https://www.python-httpx.org |
-| PyInstaller 文档 | https://pyinstaller.org |
+## 12. 会话工作规范（铁律）
+
+> **以下规则适用于每次对话，不得违反。**
+
+1. **先出方案再动手**：任何文件修改、执行 shell 命令前，优先输出完整执行方案；大规模改动主动使用 `/plan` 生成计划表给用户审核，没有确认不直接改动代码。
+
+2. **最小改动原则**：修改代码遵循最小改动原则，不随意重构无关代码、不删除原有业务逻辑。每改一行都要能说清楚"为什么"。
+
+3. **四件套不遗漏**：新增功能必须同步考虑：**参数校验**（Pydantic / 边界判断）、**异常捕获**（try/except + 有意义的错误信息）、**日志输出**（logger.info/warning/error，禁止 print）、**边界条件**（空值/超长/并发/特殊字符）。
+
+4. **遵循现有代码风格**：如果项目有已有规范 → 严格遵循；如果缺少规范 → 使用行业通用最佳实践（PEP 8、12 Factor App、RESTful API 设计）。命名、注释语言、文件组织方式全部对齐现有代码。
+
+5. **技术选型先对比**：出现技术选择时，主动列出方案优劣对比（至少 2 个选项），标注各自适用场景和 trade-off，不自行盲目选型。"够用不折腾"优先于"先进但复杂"。
+
+6. **分阶段交付**：不一次性生成超大批量文件，每阶段完成主动同步进度。每完成一个独立可运行的小功能 → 汇报 → 确认 → 下一步。
+
+7. **不懂就问**：如果看不懂项目结构、不清楚业务约定、不确定实现方式，优先向用户提问，不猜测实现。宁可多问一句，不要写错一行。
+
+---
+
+## 13. 全局 Agent 架构
+
+> **Agent ≠ LLM 对话。Agent = 有目标 + 能推理 + 能调工具 + 有记忆**
+
+| Agent | 阶段 | 能力 | Token 成本 |
+|-------|------|------|-----------|
+| **Import Agent** | P3 | 文件解析 + 推荐文件夹 + 推荐标签 + 自动向量化 | 零（规则+Embedding） |
+| **Tag Agent** | P3.5/P4 | 关键词提取 + 标签匹配 + 去重合并 + 层级建议 | 零（jieba+Embedding）→ P4 加 LLM |
+| **Link Agent** | P5 | 语义相似度 + 双向链接建议 + 知识图谱边 | 零（Embedding） |
+| **Research Agent** | P? | 多 Agent 协作（检索→分析→写作→审核），Function Calling | 高（LLM + 工具调用） |
+| **Quiz Agent** | P6 | 题目生成 + 自动批改 + 复习建议 | 中（LLM 生成） |
+| **Review Agent** | P8 | 周报总结 + 进度追踪 + 学习时间线 | 中（LLM 总结） |
+| **Chat Agent** | P1 ✅ | 基础对话 + RAG 增强 + 上下文记忆 | 中（LLM 对话） |
+| **Knowledge Agent** | P? | 知识缺口发现 + 学习路径推荐 + 概念成熟度 | 高（LLM + 深度分析） |

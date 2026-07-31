@@ -16,9 +16,14 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 class Settings(BaseSettings):
     """应用配置，自动从 .env 文件读取"""
 
-    # --- LLM API ---
+    # --- LLM API (DeepSeek) ---
     deepseek_api_key: str = "sk-xxx"
     deepseek_base_url: str = "https://api.deepseek.com"
+
+    # --- Embedding API (SiliconFlow) ---
+    siliconflow_api_key: str = "sk-xxx"
+    siliconflow_base_url: str = "https://api.siliconflow.cn/v1"
+    embedding_model: str = "BAAI/bge-large-zh-v1.5"
 
     # --- 数据库 ---
     database_url: str = "sqlite:///./data/app.db"
@@ -39,7 +44,6 @@ class Settings(BaseSettings):
 
     # --- AI 参数 ---
     default_model: str = "deepseek-chat"
-    embedding_model: str = "text-embedding-3-small"
     max_tokens: int = 4096
     temperature: float = 0.7
 
