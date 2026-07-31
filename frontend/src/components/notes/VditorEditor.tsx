@@ -2,12 +2,13 @@
  * VditorEditor — Vditor Markdown 编辑器的 React 封装
  * -------------------------------------------------
  * 使用 useEffect + useRef 管理 Vditor 生命周期。
- * 支持受控模式（value/onChange）。
+ * 支持受控模式（value/onChange）+ 深色主题跟随（useThemeStore）。
  */
 import { useEffect, useRef, useCallback } from 'react'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 import { cn } from '@/lib/utils'
+import { useThemeStore } from '@/stores/theme'
 
 interface VditorEditorProps {
   value: string
@@ -28,6 +29,7 @@ export default function VditorEditor({
   const vditorRef = useRef<Vditor | null>(null)
   const valueRef = useRef(value)
   const onChangeRef = useRef(onChange)
+  const isDark = useThemeStore((s) => s.isDark)
 
   // Keep the latest onChange callback in ref
   onChangeRef.current = onChange
@@ -40,6 +42,7 @@ export default function VditorEditor({
       mode: 'ir',
       placeholder,
       value,
+      theme: isDark ? 'dark' : 'classic',  // 跟随应用主题
       toolbar: [
         'headings',
         'bold',
@@ -72,13 +75,15 @@ export default function VditorEditor({
       },
       after() {
         vditorRef.current = vditor
+        // 初始化后按当前主题强制刷新（v3 需 setTheme 才生效完整）
+        vditor.setTheme(isDark ? 'dark' : 'classic')
         // Disable toolbar buttons in readonly mode
         if (readonly) {
           vditor.disabled()
         }
       },
     })
-  }, [placeholder, readonly])
+  }, [placeholder, readonly, isDark])
 
   // Initialize on mount
   useEffect(() => {
@@ -90,6 +95,13 @@ export default function VditorEditor({
       }
     }
   }, [])
+
+  // 主题切换时动态跟随（避免 md 编辑区与全局深色模式脱节）
+  useEffect(() => {
+    if (vditorRef.current) {
+      vditorRef.current.setTheme(isDark ? 'dark' : 'classic')
+    }
+  }, [isDark])
 
   // Sync external value changes
   useEffect(() => {
