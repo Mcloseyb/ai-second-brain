@@ -17,7 +17,7 @@ import {
   Brain,
   NotebookPen,
   MessageSquare,
-  Telescope,
+  GraduationCap,
   LayoutDashboard,
   Sun,
   Moon,
@@ -32,14 +32,14 @@ import { cn } from '@/lib/utils'
 const navItems = [
   { icon: NotebookPen, title: '智能笔记', path: '/notes' },
   { icon: MessageSquare, title: '知识问答', path: '/chat' },
-  { icon: Telescope, title: '深度研究', path: '/research' },
+  { icon: GraduationCap, title: '出题自测', path: '/quiz' },
   { icon: LayoutDashboard, title: '数据看板', path: '/dashboard' },
 ]
 
 const pageTitles: Record<string, string> = {
   '/notes': '智能笔记',
   '/chat': '知识问答',
-  '/research': '深度研究',
+  '/quiz': 'AI 出题自测',
   '/dashboard': '数据看板',
 }
 

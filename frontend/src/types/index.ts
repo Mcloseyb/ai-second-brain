@@ -141,12 +141,57 @@ export interface QtBridge {
   checkBackendHealth(): string
 }
 
-// ---- Research agent types ----
+// ---- Agent progress types (深度研究页曾用；暂保留供 Agent 进度组件复用) ----
 
 export interface AgentStep {
   agent: 'retriever' | 'analyst' | 'writer' | 'reviewer'
   status: 'pending' | 'running' | 'completed' | 'error'
   message?: string
+}
+
+// ---- Quiz types (P6 出题自测) ----
+
+export interface QuizQuestion {
+  /** 答题阶段可见的题目（不含答案） */
+  id: string
+  type: 'choice' | 'short'
+  question: string
+  /** 单选题 4 个选项；简答题为空 */
+  options?: string[]
+}
+
+export interface QuizGenerateResponse {
+  quiz_id: number
+  notebook_id: number
+  folder: string | null
+  note_count: number
+  questions: QuizQuestion[]
+}
+
+export interface QuizGradeResult {
+  question_id: string
+  correct: boolean
+  user_answer: string
+  answer: string
+  explanation: string
+  comment: string | null
+  /** 简答题批改的 0-10 分；选择题无 */
+  score?: number
+}
+
+export interface QuizGradeResponse {
+  quiz_id: number
+  notebook_id: number | null
+  total: number
+  correct: number
+  score: number
+  results: QuizGradeResult[]
+  summary: string
+}
+
+export interface QuizAttempt {
+  question_id: string
+  answer: string
 }
 
 // ---- Dashboard types ----

@@ -28,6 +28,9 @@ import type {
   ImportResponse,
   Notebook,
   FolderTreeResponse,
+  QuizGenerateResponse,
+  QuizGradeResponse,
+  QuizAttempt,
 } from '@/types'
 
 // 后端固定地址
@@ -128,6 +131,19 @@ export const notebooksApi = {
   /** 按文件夹获取笔记 */
   notes: (notebookId: number, folder?: string) =>
     client.get(`/api/notebooks/${notebookId}/notes`, { params: { folder } }) as Promise<NotesListResponse>,
+}
+
+// ============================================================
+// 出题自测（P6）
+// ============================================================
+export const quizApi = {
+  /** 生成题目 — folder 为 null/空 = 整个知识库；否则该文件夹(含子文件夹)全部笔记 */
+  generate: (notebookId: number, folder: string | null = null, count = 7) =>
+    client.post('/api/quiz/generate', { notebook_id: notebookId, folder, count }) as Promise<QuizGenerateResponse>,
+
+  /** 批改答案 */
+  grade: (quizId: number, answers: QuizAttempt[]) =>
+    client.post('/api/quiz/grade', { quiz_id: quizId, answers }) as Promise<QuizGradeResponse>,
 }
 
 // ============================================================

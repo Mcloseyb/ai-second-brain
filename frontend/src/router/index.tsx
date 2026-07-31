@@ -10,7 +10,7 @@ import App from '@/App'
 
 const NotesPage = lazy(() => import('@/pages/NotesPage'))
 const ChatPage = lazy(() => import('@/pages/ChatPage'))
-const ResearchPage = lazy(() => import('@/pages/ResearchPage'))
+const QuizPage = lazy(() => import('@/pages/QuizPage'))
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 
 export const router = createHashRouter([
@@ -21,7 +21,7 @@ export const router = createHashRouter([
       { index: true, element: <Navigate to="/notes" replace /> },
       { path: 'notes', element: <NotesPage /> },
       { path: 'chat', element: <ChatPage /> },
-      { path: 'research', element: <ResearchPage /> },
+      { path: 'quiz', element: <QuizPage /> },
       { path: 'dashboard', element: <DashboardPage /> },
     ],
   },
