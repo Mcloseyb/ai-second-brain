@@ -33,6 +33,8 @@ import type {
   QuizAttempt,
   DashboardStatsResponse,
   GraphResponse,
+  GraphCluster,
+  ClusterNamesResponse,
 } from '@/types'
 
 // 后端固定地址
@@ -143,11 +145,15 @@ export const dashboardApi = {
   stats: () => client.get('/api/dashboard/stats') as Promise<DashboardStatsResponse>,
 
   /**
-   * 知识图谱（语义聚类，不画连线）
-   * threshold = 强关联阈值；top_k = 布局/高亮邻居数；clusters = 分簇数（默认按笔记数）
+   * 知识图谱（云朵语义聚类，不画内部连线）
+   * threshold = 强关联阈值；clusters = 分簇数（默认按笔记数）
    */
-  graph: (params: { notebook_id?: number | null; threshold?: number; top_k?: number; clusters?: number } = {}) =>
+  graph: (params: { notebook_id?: number | null; threshold?: number; clusters?: number } = {}) =>
     client.get('/api/dashboard/graph', { params }) as Promise<GraphResponse>,
+
+  /** Agent 给每个簇（云朵）生成语义名称（LLM 总结簇内内容） */
+  clusterNames: (clusters: GraphCluster[]) =>
+    client.post('/api/dashboard/cluster-names', { clusters }) as Promise<ClusterNamesResponse>,
 }
 
 // ============================================================

@@ -207,11 +207,13 @@ export interface DashboardStats {
 export interface GraphNode {
   id: number
   name: string
-  /** 节点分类 = 语义连通簇（"簇N"），同簇同色；无关联为 "未关联" */
+  /** 节点分类 = 语义连通簇（"簇N"），同簇进同一朵云；无关联为 "未关联" */
   category: string
   symbolSize: number
   /** 关联次数（被多少篇笔记关联，越大越重要） */
   degree?: number
+  /** KMeans 簇编号；null = 游离节点（不在任何云朵内） */
+  cluster_id?: number | null
   word_count: number
   notebook_id: number | null
   folder: string
@@ -225,10 +227,35 @@ export interface GraphEdge {
   weight?: number
 }
 
+/** 云朵（KMeans 语义簇）— 供前端绘制云朵 + Agent 命名 */
+export interface GraphCluster {
+  cluster_id: number
+  count: number
+  titles: string[]
+  preview?: string
+}
+
+/** 簇间相似度边（相关云朵互联） */
+export interface GraphClusterEdge {
+  source: number
+  target: number
+  /** 两簇笔记相似度均值 0~1 */
+  weight?: number
+}
+
 export interface GraphData {
   nodes: GraphNode[]
-  /** 语义邻居边：仅用于布局聚簇 + 点击高亮，不绘制 */
+  /** 语义邻居边：用于点击高亮关联笔记，不绘制 */
   edges: GraphEdge[]
+  /** KMeans 语义簇（云朵） */
+  clusters?: GraphCluster[]
+  /** 簇间相似度边（云朵互联） */
+  cluster_edges?: GraphClusterEdge[]
+}
+
+/** 云朵命名结果（Agent LLM 生成） */
+export interface ClusterNamesResponse {
+  names: { cluster_id: number; name: string }[]
 }
 
 export interface DashboardStatsResponse extends DashboardStats {}
