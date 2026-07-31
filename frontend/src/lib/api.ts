@@ -31,6 +31,8 @@ import type {
   QuizGenerateResponse,
   QuizGradeResponse,
   QuizAttempt,
+  DashboardStatsResponse,
+  GraphResponse,
 } from '@/types'
 
 // 后端固定地址
@@ -131,6 +133,18 @@ export const notebooksApi = {
   /** 按文件夹获取笔记 */
   notes: (notebookId: number, folder?: string) =>
     client.get(`/api/notebooks/${notebookId}/notes`, { params: { folder } }) as Promise<NotesListResponse>,
+}
+
+// ============================================================
+// 数据看板（P7）
+// ============================================================
+export const dashboardApi = {
+  /** 统计概览 */
+  stats: () => client.get('/api/dashboard/stats') as Promise<DashboardStatsResponse>,
+
+  /** 知识图谱（语义互联）— notebook_id 可选，threshold 默认 0.35 */
+  graph: (params: { notebook_id?: number | null; threshold?: number } = {}) =>
+    client.get('/api/dashboard/graph', { params }) as Promise<GraphResponse>,
 }
 
 // ============================================================

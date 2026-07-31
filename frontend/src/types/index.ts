@@ -194,25 +194,32 @@ export interface QuizAttempt {
   answer: string
 }
 
-// ---- Dashboard types ----
+// ---- Dashboard types (P7 真实图谱) ----
 
 export interface DashboardStats {
   total_notes: number
-  total_documents: number
-  total_conversations: number
   total_tags: number
+  total_links: number
+  synced: number
+  pending: number
 }
 
 export interface GraphNode {
-  id: string
+  id: number
   name: string
+  /** 节点分类（= 第一个标签名；无标签为 "未分类"），仅用于着色 */
   category: string
   symbolSize: number
+  word_count: number
+  notebook_id: number | null
+  folder: string
+  tags: string[]
 }
 
 export interface GraphEdge {
-  source: string
-  target: string
+  source: number
+  target: number
+  /** 语义相似度 0~1 */
   weight?: number
 }
 
@@ -220,6 +227,10 @@ export interface GraphData {
   nodes: GraphNode[]
   edges: GraphEdge[]
 }
+
+export interface DashboardStatsResponse extends DashboardStats {}
+
+export interface GraphResponse extends GraphData {}
 
 // ---- API response wrappers ----
 

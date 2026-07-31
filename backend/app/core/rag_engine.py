@@ -426,6 +426,39 @@ class RAGEngine:
         except Exception:
             return False
 
+    # ============================================================
+    # 全量向量导出（P7 知识图谱）
+    # ============================================================
+    def get_all_embeddings(self) -> dict[int, list[float]]:
+        """
+        一次性取回所有笔记的向量（note_id → embedding）
+
+        用于知识图谱构建等场景，避免逐篇查询。
+        一次性调用 ChromaDB collection.get，附带 metadatas 以便反查 note_id。
+
+        Returns:
+            {note_id: embedding_list, ...} — 可能为空 dict
+        """
+        try:
+            data = self.collection.get(include=["embeddings", "metadatas"])
+        except Exception as e:
+            logger.error(f"获取全量向量失败: {e}")
+            return {}
+
+        result: dict[int, list[float]] = {}
+        # 注意: embeddings 可能是 numpy 数组，不能做 truthiness 判断，须显式判 None
+        ids = data.get("ids") if data.get("ids") is not None else []
+        embeddings = data.get("embeddings") if data.get("embeddings") is not None else []
+        metadatas = data.get("metadatas") if data.get("metadatas") is not None else []
+
+        for i, doc_id in enumerate(ids):
+            meta = metadatas[i] if i < len(metadatas) and metadatas[i] else {}
+            note_id = meta.get("note_id", int(doc_id))
+            emb = embeddings[i] if i < len(embeddings) else None
+            if emb is not None:
+                result[int(note_id)] = list(emb)
+        return result
+
 
 # 全局单例
 rag_engine = RAGEngine()
