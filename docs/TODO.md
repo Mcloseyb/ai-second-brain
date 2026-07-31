@@ -14,7 +14,7 @@
 | P2 | 笔记系统 | ✅ | 10/10 | CRUD + 编辑器 |
 | **P3** | **文档导入+RAG检索** | **✅** | **17/17** | 语义搜索 + BM25 混合检索 |
 | P4 | AI 自动标签 | ✅ | 8/8 | 简易版 + 完整版(Function Calling) |
-| P5 | 智能双向链接 | ⏳ | 0/8 | 自动发现关联笔记 |
+| P5 | 智能双向链接 | ⏳ | 7/8 | 语义相关 + 标题检测 + 反向链接（正文高亮待做） |
 | P6 | AI 出题自测 | ⏳ | 0/7 | 根据笔记生成题目 |
 | P7 | 真实知识图谱 | ⏳ | 0/6 | 标签+语义双驱图谱 |
 | P8 | 知识回顾总结 | ⏳ | 0/5 | 周报 + 学习路径 |
@@ -139,16 +139,16 @@
 > **打开一篇笔记 → 右侧出现 "Related Notes" → 基于语义相似度自动发现**
 
 ### 5.1 后端
-- [ ] 5.1.1 实现笔记相似度计算（Embedding 余弦相似度）
-- [ ] 5.1.2 GET /api/notes/{id}/related — 返回最相关的 Top-5 笔记
-- [ ] 5.1.3 正文内自动检测其他笔记标题 → 建议生成超链接
-- [ ] 5.1.4 记录笔记间的引用关系（note_links 表: source_id → target_id）
+- [x] 5.1.1 笔记相似度计算 — 复用 rag_engine.search 纯语义检索（Embedding 余弦，零 token）
+- [x] 5.1.2 GET /api/notes/{id}/related — 语义 Top-5（排除自身 + 同笔记库过滤）
+- [x] 5.1.3 GET /api/notes/{id}/title-links — 正文检测其他笔记标题（count 命中）
+- [x] 5.1.4 note_links 表（source/target/link_type 唯一约束）+ POST /links 落库 + linked-from 查询
 
 ### 5.2 前端
-- [ ] 5.2.1 笔记页右侧增加 "Related Notes" 面板
-- [ ] 5.2.2 打开笔记时自动加载关联列表
-- [ ] 5.2.3 笔记正文中自动高亮已链接的笔记标题
-- [ ] 5.2.4 被引用笔记底部显示 "Linked from: X篇笔记"
+- [x] 5.2.1 笔记页右侧 "Related Notes" 面板（可折叠 36px/280px）
+- [x] 5.2.2 打开笔记时自动加载关联列表（related + linked-from + title-links 并行）
+- [ ] 5.2.3 笔记正文中自动高亮已链接的笔记标题（Vditor IR 模式内高亮，待做）
+- [x] 5.2.4 被引用笔记显示 "Linked from: X篇笔记"（可展开列表）
 
 ---
 
@@ -234,3 +234,4 @@
 | 2026-07-31 | P3.2.3 混合检索完成，P3 全绿 17/17；笔记库/文件夹树/右键菜单完成 |
 | 2026-07-31 | P4 简易版完成（4/8）：jieba TF-IDF + Embedding 标签推荐 Agent + auto-tag API + 前端 TagSuggestBar |
 | 2026-07-31 | P4 完整版完成（8/8）：ReAct Agent 基类 + ToolRegistry + Function Calling 标签推荐 + merge 去重合并 |
+| 2026-07-31 | P5 完成（7/8）：语义相关 + 标题检测 + note_links 落库 + Related Notes 面板 + Linked from |

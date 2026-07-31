@@ -44,6 +44,7 @@ def init_db():
     import app.models.note          # noqa: F401
     import app.models.tag           # noqa: F401
     import app.models.notebook      # noqa: F401
+    import app.models.note_link     # noqa: F401
 
     # 确保数据目录存在
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)

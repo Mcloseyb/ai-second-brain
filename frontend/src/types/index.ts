@@ -245,6 +245,50 @@ export interface NoteSearchResponse {
   query: string
 }
 
+// ---- 智能双向链接（P5） ----
+
+export interface RelatedNote {
+  note_id: number
+  title: string
+  text: string
+  similarity: number
+  folder: string
+  word_count: number
+  tags: Tag[]
+  updated_at: string | null
+}
+
+export interface RelatedResponse {
+  note_id: number
+  related: RelatedNote[]
+}
+
+export interface LinkedFromItem {
+  id: number
+  title: string
+  folder: string
+  word_count: number
+  tags: Tag[]
+  link_type: string
+  updated_at: string | null
+}
+
+export interface LinkedFromResponse {
+  note_id: number
+  linked_from: LinkedFromItem[]
+}
+
+export interface TitleLinkDetection {
+  target_note_id: number
+  title: string
+  count: number
+}
+
+export interface TitleLinksResponse {
+  note_id: number
+  detections: TitleLinkDetection[]
+}
+
 // ---- AI 自动标签（P4） ----
 
 export interface TagSuggestion {

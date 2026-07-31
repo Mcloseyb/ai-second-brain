@@ -10,6 +10,7 @@ import NoteList from '@/components/notes/NoteList'
 import VditorEditor from '@/components/notes/VditorEditor'
 import EditorContextMenu from '@/components/notes/EditorContextMenu'
 import TagSuggestBar from '@/components/notes/TagSuggestBar'
+import RelatedNotesPanel from '@/components/notes/RelatedNotesPanel'
 import FileDropZone from '@/components/documents/FileDropZone'
 import { notesApi, tagsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ import type { TagSuggestion, MergeSuggestion } from '@/types'
 export default function NotesPage() {
   const {
     selectedId,
+    setSelectedId,
     activeNotebookId,
     fetchNote,
     updateNote,
@@ -209,7 +211,7 @@ export default function NotesPage() {
         <NoteList />
       </div>
 
-      {/* ======== 右侧：编辑器（占满全部空间） ======== */}
+      {/* ======== 中间：编辑器（占满剩余空间） ======== */}
       <div className="flex-1 min-w-0 h-full flex flex-col">
         {selectedId ? (
           <>
@@ -319,6 +321,11 @@ export default function NotesPage() {
           </div>
         )}
       </div>
+
+      {/* ======== 最右侧：智能双向链接面板（P5，可折叠） ======== */}
+      {selectedId && (
+        <RelatedNotesPanel noteId={selectedId} onSelect={setSelectedId} />
+      )}
     </div>
   )
 }

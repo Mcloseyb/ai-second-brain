@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.note_service import note_service
+from app.services.link_service import link_service
 from app.core.rag_engine import rag_engine
 from app.agents.tag_agent import tag_agent
 
@@ -206,3 +207,82 @@ async def auto_tag_note(
 
     suggestions = await tag_agent.suggest_tags(db, note)
     return {"note_id": note_id, "mode": "simple", "suggestions": suggestions}
+
+
+# ============================================================
+# 智能双向链接（P5）
+# ============================================================
+
+class NoteLinksCreate(BaseModel):
+    target_ids: list[int] = Field(default_factory=list, description="目标笔记 ID 列表")
+    link_type: str = Field(default="title", pattern="^(title|manual)$", description="链接类型")
+
+
+@router.get("/{note_id}/related")
+async def related_notes(
+    note_id: int,
+    top_k: int = Query(default=5, ge=1, le=10),
+    db: Session = Depends(get_db),
+):
+    """
+    智能双向链接 — 返回与笔记语义最相关的 Top-K 笔记
+
+    基于向量语义相似度（Embedding 余弦），实时计算、零 token。
+    点击结果可跳转到对应笔记，形成"知识互联"。
+
+    Returns:
+        {"note_id": ..., "related": [{note_id, title, text, similarity, folder, tags}, ...]}
+    """
+    related = await link_service.get_related_notes(db, note_id, top_k=top_k)
+    return {"note_id": note_id, "related": related}
+
+
+@router.get("/{note_id}/linked-from")
+async def linked_from_notes(note_id: int, db: Session = Depends(get_db)):
+    """
+    反向链接 — 引用此笔记的其他笔记（Linked from）
+
+    基于 note_links 表的显式记录（标题检测 / 手动确认）。
+
+    Returns:
+        {"note_id": ..., "linked_from": [{id, title, folder, link_type, ...}, ...]}
+    """
+    linked_from = link_service.get_linked_from(db, note_id)
+    return {"note_id": note_id, "linked_from": linked_from}
+
+
+@router.get("/{note_id}/title-links")
+async def title_links(note_id: int, db: Session = Depends(get_db)):
+    """
+    标题检测 — 扫描笔记正文，检测是否包含其他笔记的标题
+
+    命中即"潜在引用"，前端展示建议，用户确认后通过 POST /links 落库。
+
+    Returns:
+        {"note_id": ..., "detections": [{target_note_id, title, count}, ...]}
+    """
+    detections = link_service.detect_title_links(db, note_id)
+    return {"note_id": note_id, "detections": detections}
+
+
+@router.post("/{note_id}/links", status_code=201)
+async def create_links(
+    note_id: int,
+    data: NoteLinksCreate,
+    db: Session = Depends(get_db),
+):
+    """
+    记录显式链接 — 确认标题检测结果 / 手动添加链接
+
+    Args:
+        target_ids: 目标笔记 ID 列表
+        link_type: title（自动检测确认）| manual（手动）
+
+    Returns:
+        {"recorded": n, "skipped": m}
+    """
+    note = note_service.get_by_id(db, note_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    result = link_service.record_links(db, note_id, data.target_ids, data.link_type)
+    return result

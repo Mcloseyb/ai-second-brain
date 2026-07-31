@@ -14,6 +14,9 @@ import type {
   NoteResponse,
   NoteSearchResponse,
   AutoTagResponse,
+  RelatedResponse,
+  LinkedFromResponse,
+  TitleLinksResponse,
   TagsListResponse,
   TagResponse,
   Conversation,
@@ -81,6 +84,22 @@ export const notesApi = {
   /** AI 自动标签推荐（P4）: mode=simple 简易版(零token) / mode=llm 完整版(Function Calling) */
   autoTag: (noteId: number, mode: 'simple' | 'llm' = 'simple') =>
     client.post(`/api/notes/${noteId}/auto-tag`, null, { params: { mode } }) as Promise<AutoTagResponse>,
+
+  /** 语义相关笔记（P5 双向链接） */
+  related: (noteId: number, topK = 5) =>
+    client.get(`/api/notes/${noteId}/related`, { params: { top_k: topK } }) as Promise<RelatedResponse>,
+
+  /** 反向链接 — 引用此笔记的笔记 */
+  linkedFrom: (noteId: number) =>
+    client.get(`/api/notes/${noteId}/linked-from`) as Promise<LinkedFromResponse>,
+
+  /** 标题检测 — 正文包含其他笔记标题 */
+  titleLinks: (noteId: number) =>
+    client.get(`/api/notes/${noteId}/title-links`) as Promise<TitleLinksResponse>,
+
+  /** 确认记录链接（标题检测/手动） */
+  createLinks: (noteId: number, targetIds: number[], linkType: 'title' | 'manual' = 'title') =>
+    client.post(`/api/notes/${noteId}/links`, { target_ids: targetIds, link_type: linkType }) as Promise<{ recorded: number; skipped: number }>,
 }
 
 // ============================================================
