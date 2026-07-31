@@ -19,8 +19,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import {
-  GraduationCap, Loader2, Check, X, Folder, FolderOpen,
-  ChevronRight, ChevronDown, ClipboardList, Library,
+  GraduationCap, Loader2, Check, X, Folder, ClipboardList, Library,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Notebook, FolderNode, QuizGenerateResponse, QuizGradeResponse } from '@/types'
@@ -33,13 +32,26 @@ function countFolderNotes(folder: FolderNode): number {
   )
 }
 
+/** 扁平化文件夹树（含层级深度，供下拉菜单展示） */
+interface FlatFolder { path: string; name: string; count: number; depth: number }
+function flattenFolders(folders: FolderNode[], depth = 0): FlatFolder[] {
+  const out: FlatFolder[] = []
+  for (const f of folders) {
+    out.push({ path: f.path, name: f.name, count: countFolderNotes(f), depth })
+    out.push(...flattenFolders(f.children || [], depth + 1))
+  }
+  return out
+}
+
+/** 「整个知识库」的下拉占位值 */
+const SCOPE_ALL = '__all__'
+
 export default function QuizPage() {
   // ---- 出题范围 ----
   const [notebooks, setNotebooks] = useState<Notebook[]>([])
   const [notebookId, setNotebookId] = useState<number | null>(null)
   const [folderTree, setFolderTree] = useState<FolderNode[]>([])
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null) // null = 整个知识库
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [scopeNotes, setScopeNotes] = useState<number | null>(null) // 选中范围笔记数
   const [notebookTotal, setNotebookTotal] = useState<number>(0) // 整个知识库笔记数
 
@@ -62,7 +74,6 @@ export default function QuizPage() {
     setNotebookId(id)
     setSelectedFolder(null)
     setFolderTree([])
-    setExpanded(new Set())
     setScopeNotes(null)
     setQuiz(null)
     setGrade(null)
@@ -70,16 +81,6 @@ export default function QuizPage() {
       const res = await notebooksApi.folderTree(id)
       const folders = res.folders || []
       setFolderTree(folders)
-      // 默认全部展开，方便浏览
-      const all = new Set<string>()
-      const collect = (list: FolderNode[]) => {
-        for (const f of list) {
-          all.add(f.path)
-          collect(f.children || [])
-        }
-      }
-      collect(folders)
-      setExpanded(all)
       // 整个知识库的笔记数 = 文件夹 + 根目录（存起来供「整个知识库」复用）
       const folderCount = folders.reduce((s, f) => s + countFolderNotes(f), 0)
       const total = folderCount + (res.root_notes?.length || 0)
@@ -90,60 +91,23 @@ export default function QuizPage() {
     }
   }, [])
 
-  const toggleFolder = (path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(path)) next.delete(path)
-      else next.add(path)
-      return next
-    })
-  }
-
-  /** 选中文件夹 → 计算其递归笔记数；null = 整个知识库 */
-  const handleSelectFolder = (folder: FolderNode | null) => {
-    if (folder) {
-      setSelectedFolder(folder.path)
-      setScopeNotes(countFolderNotes(folder))
-    } else {
+  /** 选中范围（下拉菜单）：path=null 整个知识库；否则该文件夹（含子文件夹递归） */
+  const handleSelectScope = (value: string | null) => {
+    if (!value || value === SCOPE_ALL) {
       setSelectedFolder(null)
       setScopeNotes(notebookTotal)
+    } else {
+      setSelectedFolder(value)
+      const flat = flattenFolders(folderTree)
+      const target = flat.find((f) => f.path === value)
+      setScopeNotes(target?.count ?? 0)
     }
     setQuiz(null)
     setGrade(null)
   }
 
-  // ---- 递归渲染文件夹树（可选中） ----
-  const renderFolder = (folder: FolderNode, depth = 0): React.ReactNode => {
-    const isOpen = expanded.has(folder.path)
-    const isSelected = selectedFolder === folder.path
-    const pad = 12 + depth * 16
-    return (
-      <div key={folder.path}>
-        <div
-          className={cn(
-            'flex items-center gap-1 rounded-md py-1 pr-2 text-sm cursor-pointer select-none transition-colors',
-            isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-accent',
-          )}
-          style={{ paddingLeft: `${pad}px` }}
-          onClick={() => handleSelectFolder(folder)}
-        >
-          <button
-            type="button"
-            className="shrink-0 p-0.5 rounded hover:bg-accent"
-            onClick={(e) => { e.stopPropagation(); toggleFolder(folder.path) }}
-          >
-            {isOpen ? <ChevronDown className="size-3.5 text-muted-foreground" />
-                     : <ChevronRight className="size-3.5 text-muted-foreground" />}
-          </button>
-          {isOpen ? <FolderOpen className="size-3.5 shrink-0 text-amber-500" />
-                  : <Folder className="size-3.5 shrink-0 text-amber-500" />}
-          <span className="flex-1 truncate">{folder.name}</span>
-          <span className="text-[10px] text-muted-foreground shrink-0">{countFolderNotes(folder)} 篇</span>
-        </div>
-        {isOpen && (folder.children || []).map((child) => renderFolder(child, depth + 1))}
-      </div>
-    )
-  }
+  // ---- 下拉菜单的文件夹选项（含层级缩进） ----
+  const flatFolders = flattenFolders(folderTree)
 
   // ---- 生成题目 ----
   const handleGenerate = useCallback(async () => {
@@ -191,19 +155,9 @@ export default function QuizPage() {
     }
   }, [quiz, answers])
 
+  // 选中范围的显示名（下拉已直观展示；这里用于按钮下方小字）
   const scopeLabel = selectedFolder
-    ? (() => {
-        const all: FolderNode[] = []
-        const find = (list: FolderNode[]): FolderNode | null => {
-          for (const f of list) {
-            if (f.path === selectedFolder) return f
-            const found = find(f.children || [])
-            if (found) return found
-          }
-          return null
-        }
-        return find(folderTree)?.name || selectedFolder
-      })()
+    ? flattenFolders(folderTree).find((f) => f.path === selectedFolder)?.name || selectedFolder
     : notebooks.find((n) => n.id === notebookId)?.name || ''
 
   return (
@@ -234,40 +188,44 @@ export default function QuizPage() {
               </Select>
             </div>
 
-            {/* 文件夹树 */}
+            {/* 出题范围（下拉菜单） */}
             <div className="flex-1 min-w-0">
               <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
                 <Folder className="size-3" /> 出题范围
                 <span className="text-[10px] opacity-70">（选择文件夹 = 包含其所有子文件夹笔记）</span>
               </p>
-              {notebookId ? (
-                folderTree.length > 0 ? (
-                  <ScrollArea className="max-h-[180px] rounded-md border">
-                    <div className="py-1">
-                      {/* 整个知识库 */}
-                      <div
-                        className={cn(
-                          'flex items-center gap-1.5 rounded-md px-2 py-1 text-sm cursor-pointer select-none transition-colors',
-                          selectedFolder === null ? 'bg-primary/10 text-primary' : 'hover:bg-accent',
-                        )}
-                        onClick={() => handleSelectFolder(null)}
+              <Select
+                value={notebookId ? selectedFolder ?? SCOPE_ALL : undefined}
+                onValueChange={(v) => handleSelectScope(v)}
+                disabled={!notebookId}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="选择出题范围" />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* 整个知识库 */}
+                  <SelectItem value={SCOPE_ALL}>
+                    <span className="flex items-center gap-1.5">
+                      <Library className="size-3.5" />
+                      整个知识库（{notebookTotal} 篇）
+                    </span>
+                  </SelectItem>
+                  {/* 所有文件夹（含层级缩进） */}
+                  {flatFolders.map((f) => (
+                    <SelectItem key={f.path} value={f.path}>
+                      <span
+                        className="flex items-center gap-1.5"
+                        style={{ paddingLeft: `${f.depth * 16}px` }}
                       >
-                        <Library className="size-3.5 shrink-0" />
-                        <span className="flex-1 truncate">整个知识库</span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{notebookTotal} 篇</span>
-                      </div>
-                      {folderTree.map((f) => renderFolder(f))}
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-xs text-muted-foreground py-3 text-center border rounded-md">
-                    该知识库没有文件夹，将使用「整个知识库」
-                  </p>
-                )
-              ) : (
-                <p className="text-xs text-muted-foreground py-3 text-center border rounded-md">
-                  请先选择知识库
-                </p>
+                        <Folder className="size-3.5 shrink-0 text-amber-500" />
+                        {f.name}（{f.count} 篇）
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!notebookId && (
+                <p className="text-[10px] text-muted-foreground mt-1">请先选择知识库</p>
               )}
             </div>
 
