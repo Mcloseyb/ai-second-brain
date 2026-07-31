@@ -63,6 +63,7 @@ export default function RelatedNotesPanel({
       const ids = detections.map((d) => d.target_note_id)
       const res = await notesApi.createLinks(noteId, ids, 'title')
       toast.success(`已确认 ${res.recorded} 条标题引用`)
+      setDetections([]) // 确认后清除建议，按钮消失
       const r2 = await notesApi.linkedFrom(noteId)
       setLinkedFrom(r2.linked_from || [])
     } catch (e) {
