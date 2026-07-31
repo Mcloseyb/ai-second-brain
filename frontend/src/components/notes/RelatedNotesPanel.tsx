@@ -2,10 +2,9 @@
  * RelatedNotesPanel — 智能双向链接面板（P5）
  * ------------------------------------------
  * 位于编辑器右侧，可折叠。
- * 三块内容:
- *   1. 标题引用建议 — 正文包含其他笔记标题（用户确认后落库）
- *   2. 语义相关笔记 — 基于 Embedding 相似度的 Top-K 相关笔记（点击跳转）
- *   3. 反向链接(Linked from) — 引用了当前笔记的其他笔记
+ * 两块内容:
+ *   1. 语义相关笔记 — 基于 Embedding 相似度的 Top-K 相关笔记（点击跳转）
+ *   2. 反向链接(Linked from) — 引用了当前笔记的其他笔记
  */
 import { useEffect, useState, useCallback } from 'react'
 import { notesApi } from '@/lib/api'
@@ -15,10 +14,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Link2, PanelRightClose, PanelRightOpen,
-  Sparkles, Inbox, ArrowUpRight, Check,
+  Inbox, ArrowUpRight,
 } from 'lucide-react'
-import { toast } from 'sonner'
-import type { RelatedNote, LinkedFromItem, TitleLinkDetection } from '@/types'
+import type { RelatedNote, LinkedFromItem } from '@/types'
 
 export default function RelatedNotesPanel({
   noteId,
@@ -31,45 +29,26 @@ export default function RelatedNotesPanel({
   const [loading, setLoading] = useState(true)
   const [related, setRelated] = useState<RelatedNote[]>([])
   const [linkedFrom, setLinkedFrom] = useState<LinkedFromItem[]>([])
-  const [detections, setDetections] = useState<TitleLinkDetection[]>([])
   const [showLinkedFrom, setShowLinkedFrom] = useState(false)
 
   const load = useCallback(async (id: number) => {
     setLoading(true)
     try {
-      const [r1, r2, r3] = await Promise.all([
+      const [r1, r2] = await Promise.all([
         notesApi.related(id),
         notesApi.linkedFrom(id),
-        notesApi.titleLinks(id),
       ])
       setRelated(r1.related || [])
       setLinkedFrom(r2.linked_from || [])
-      setDetections(r3.detections || [])
     } catch {
       setRelated([])
       setLinkedFrom([])
-      setDetections([])
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => { load(noteId) }, [noteId, load])
-
-  /** 确认全部标题引用 → 落库 */
-  const confirmDetections = useCallback(async () => {
-    if (detections.length === 0) return
-    try {
-      const ids = detections.map((d) => d.target_note_id)
-      const res = await notesApi.createLinks(noteId, ids, 'title')
-      toast.success(`已确认 ${res.recorded} 条标题引用`)
-      setDetections([]) // 确认后清除建议，按钮消失
-      const r2 = await notesApi.linkedFrom(noteId)
-      setLinkedFrom(r2.linked_from || [])
-    } catch (e) {
-      toast.error('确认失败: ' + (e as Error).message)
-    }
-  }, [noteId, detections])
 
   const width = collapsed ? 36 : 280
   return (
@@ -102,32 +81,7 @@ export default function RelatedNotesPanel({
           </div>
         ) : (
           <div className="p-2 space-y-3">
-            {/* 1. 标题引用建议 */}
-            {detections.length > 0 && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <Sparkles className="size-3 text-violet-500 shrink-0" />
-                  <span className="text-[11px] font-medium text-muted-foreground">正文包含标题</span>
-                  <Button size="sm" className="h-5 text-[10px] px-1.5 ml-auto" onClick={confirmDetections}>
-                    <Check className="size-2.5 mr-0.5" />全部确认
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {detections.map((d) => (
-                    <button
-                      key={d.target_note_id}
-                      onClick={() => onSelect(d.target_note_id)}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-300/40 hover:bg-violet-500/20 cursor-pointer transition-colors"
-                    >
-                      {d.title}
-                      <ArrowUpRight className="size-2.5" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 2. 语义相关笔记 */}
+            {/* 1. 语义相关笔记 */}
             <div className="space-y-1">
               <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
                 <Link2 className="size-3 text-blue-500" /> 语义相关
@@ -156,7 +110,7 @@ export default function RelatedNotesPanel({
               )}
             </div>
 
-            {/* 3. 反向链接 */}
+            {/* 2. 反向链接 */}
             <div className="space-y-1">
               <button
                 className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground"
