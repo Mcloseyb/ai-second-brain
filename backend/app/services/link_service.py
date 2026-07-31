@@ -112,14 +112,6 @@ class LinkService:
             return []
 
         content = note.content
-        # 已确认落库的标题引用（不再重复提示）
-        confirmed = {
-            link.target_note_id
-            for link in db.query(NoteLink)
-            .filter_by(source_note_id=note_id, link_type="title")
-            .all()
-        }
-
         # 排除当前笔记库外的笔记（只统计本库）
         query = db.query(Note).filter(Note.id != note_id)
         if note.notebook_id:
@@ -128,8 +120,6 @@ class LinkService:
 
         hits: list[dict] = []
         for other in other_notes:
-            if other.id in confirmed:
-                continue
             title = (other.title or "").strip()
             if len(title) < MIN_TITLE_LENGTH:
                 continue

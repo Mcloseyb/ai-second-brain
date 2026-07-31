@@ -53,6 +53,9 @@ export default function NotesPage() {
   const [mergeSuggestions, setMergeSuggestions] = useState<MergeSuggestion[]>([])
   const [tagSuggesting, setTagSuggesting] = useState(false)
 
+  // ---- 正文标题高亮（P5.2.3）----
+  const [highlightTitles, setHighlightTitles] = useState<string[]>([])
+
   // ---- 加载选中笔记内容 ----
   useEffect(() => {
     if (!selectedId) {
@@ -77,6 +80,19 @@ export default function NotesPage() {
         setMergeSuggestions([])
       }
     })
+  }, [selectedId])
+
+  // ---- 加载正文标题高亮数据（P5.2.3） ----
+  useEffect(() => {
+    if (!selectedId) {
+      setHighlightTitles([])
+      return
+    }
+    notesApi.titleLinks(selectedId)
+      .then((res) => {
+        setHighlightTitles((res.detections || []).map((d) => d.title))
+      })
+      .catch(() => setHighlightTitles([]))
   }, [selectedId])
 
   // ---- 保存笔记 ----
@@ -296,6 +312,7 @@ export default function NotesPage() {
                     setDirty(true)
                   }}
                   className="h-full"
+                  highlightTitles={highlightTitles}
                 />
               </div>
             </EditorContextMenu>

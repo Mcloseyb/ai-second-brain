@@ -94,6 +94,57 @@
   border-radius: var(--radius) var(--radius) 0 0 !important;
 }
 
+/* Vditor 深色内容区 — 静态覆盖，避免依赖 CDN 动态加载 content-theme/dark.css。
+   setTheme('dark') 默认从 jsdelivr CDN 拉 dark.css，网络不可用时内容区文字
+   仍为浅色主题的黑色，与深色背景融为一体。这里显式兜底。 */
+html.dark .vditor--dark,
+html.dark .vditor--dark .vditor-content,
+html.dark .vditor--dark .vditor-ir,
+html.dark .vditor--dark .vditor-reset {
+  color: #d1d5da;
+}
+html.dark .vditor--dark .vditor-reset a,
+html.dark .vditor--dark .vditor-ir__link {
+  color: #4285f4;
+}
+html.dark .vditor--dark .vditor-reset h1,
+html.dark .vditor--dark .vditor-reset h2 {
+  border-bottom: 1px solid #d1d5da;
+}
+html.dark .vditor--dark .vditor-reset hr {
+  background-color: #d1d5da;
+}
+html.dark .vditor--dark .vditor-reset blockquote {
+  color: #b9b9b9;
+  border-left: 0.25em solid #d1d5da;
+}
+html.dark .vditor--dark .vditor-reset table tr {
+  background-color: #2f363d;
+}
+html.dark .vditor--dark .vditor-reset table td,
+html.dark .vditor--dark .vditor-reset table th {
+  border: 1px solid #dfe2e5;
+}
+html.dark .vditor--dark .vditor-reset table tbody tr:nth-child(2n) {
+  background-color: #24292e;
+}
+html.dark .vditor--dark .vditor-reset code:not(.hljs):not(.highlight-chroma) {
+  background-color: rgba(66, 133, 244, 0.36);
+}
+
+/* Vditor 正文标题高亮（P5.2.3）— 其他笔记标题自动高亮 */
+.vditor-link-hl {
+  background: rgba(66, 133, 244, 0.18);
+  border-bottom: 1px solid #4285f4;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(66, 133, 244, 0.12);
+  cursor: default;
+}
+html.dark .vditor--dark .vditor-link-hl {
+  background: rgba(66, 133, 244, 0.28);
+  border-bottom-color: #6ab0f3;
+}
+
 /* ECharts container */
 .echarts-container {
   width: 100%;
