@@ -46,6 +46,9 @@ function clusterColor(clusterId: number): string {
 
 // 向日葵螺旋黄金角（云朵内放点防重叠）
 const GOLDEN = Math.PI * (3 - Math.sqrt(5))
+// 云朵聚焦变换：展开的云朵放大居中，其余缩小变淡
+const EXPAND_SCALE = 1.6
+const SHRINK_SCALE = 0.45
 
 interface CloudGeom {
   cx: number
@@ -241,31 +244,48 @@ export default function KnowledgeGraph({
 
       const buildClouds = () =>
         [...layout.cloudGeom.entries()].map(([cid, g]) => {
-          const expanded = expandedRef.current === cid
+          const focused = expandedRef.current === cid
+          const dimmed = expandedRef.current != null && !focused
           const color = clusterColor(cid)
+          // 聚焦变换：展开的云朵放大并居中，其余缩小
+          let cx = g.cx
+          let cy = g.cy
+          let a = g.a
+          let b = g.b
+          if (expandedRef.current != null) {
+            if (focused) {
+              cx = 0
+              cy = 0
+              a = g.a * EXPAND_SCALE
+              b = g.b * EXPAND_SCALE
+            } else {
+              a = g.a * SHRINK_SCALE
+              b = g.b * SHRINK_SCALE
+            }
+          }
           return {
             id: `c${cid}`,
             name: names[cid] || `簇${cid}`,
             symbol: CLOUD_PATH,
-            symbolSize: [g.a, g.b],
-            x: g.cx,
-            y: g.cy,
+            symbolSize: [a, b],
+            x: cx,
+            y: cy,
             isCloud: true,
             clusterId: cid,
             count: cloudCount.get(cid) ?? 0,
             itemStyle: {
               color,
-              opacity: 0.16,
-              borderColor: expanded ? (dark ? '#ffffff' : '#000000') : color,
-              borderWidth: expanded ? 2.5 : 1.5,
+              opacity: dimmed ? 0.05 : focused ? 0.2 : 0.16,
+              borderColor: focused ? (dark ? '#ffffff' : '#000000') : color,
+              borderWidth: focused ? 2.5 : 1.5,
               shadowBlur: 14,
               shadowColor: 'rgba(0,0,0,0.16)',
             },
-            // 云朵名称放在正中间
+            // 云朵名称放在正中间（聚焦放大，其余缩小）
             label: {
               show: true,
               position: 'inside',
-              fontSize: 13,
+              fontSize: focused ? 15 : dimmed ? 9 : 13,
               fontWeight: 700,
               color: textColor,
             },
@@ -279,16 +299,28 @@ export default function KnowledgeGraph({
         const nbrs = selected != null ? neighborIds(selected) : null
         return nodes.map((n) => {
           const cid = n.cluster_id
-          const pos = layout.notePos.get(n.id)
-          const inCloud = cid != null && layout.cloudGeom.has(cid)
+          const g = cid != null ? layout.cloudGeom.get(cid) : undefined
+          const inCloud = !!g
+          const base = layout.notePos.get(n.id)
+          // 位置随云朵聚焦变换（展开的云朵跟随放大居中，其余跟随缩小）
+          let pos = base
+          if (expanded != null && cid != null && g && base) {
+            if (expanded === cid) {
+              pos = { x: (base.x - g.cx) * EXPAND_SCALE, y: (base.y - g.cy) * EXPAND_SCALE }
+            } else {
+              pos = { x: g.cx + (base.x - g.cx) * SHRINK_SCALE, y: g.cy + (base.y - g.cy) * SHRINK_SCALE }
+            }
+          }
           // 游离节点 / 所属云朵已展开 → 显示名称
           const showLabel = !inCloud || expanded === cid
-          // 高亮状态
-          let opacity = 1
+          // 聚焦时：非聚焦云朵（含游离节点）整体变淡
+          const cloudDimmed = expanded != null && (cid == null || expanded !== cid)
+          let opacity = cloudDimmed ? 0.12 : 1
           let borderWidth = 1.5
           let size = Math.max(10, Math.min(n.symbolSize, 34))
           if (selected != null) {
             if (selected === n.id) {
+              opacity = 1
               borderWidth = 2.5
               size += 5
             } else if (nbrs && nbrs.has(n.id)) {
@@ -326,17 +358,26 @@ export default function KnowledgeGraph({
         })
       }
 
-      const buildLinks = () =>
-        (clusterEdges || []).map((e) => ({
-          source: `c${e.source}`,
-          target: `c${e.target}`,
-          value: e.weight || 0,
-          lineStyle: {
-            color: lineColor,
-            opacity: dark ? 0.6 : 0.45,
-            width: 1 + (e.weight || 0) * 3,
-          },
-        }))
+      const buildLinks = () => {
+        const expanded = expandedRef.current
+        return (clusterEdges || []).map((e) => {
+          // 聚焦时：只保留与展开云朵相关的连线，其余变淡
+          const touching = expanded != null && (e.source === expanded || e.target === expanded)
+          const opacity = expanded != null
+            ? (touching ? 0.5 : 0.08)
+            : (dark ? 0.6 : 0.45)
+          return {
+            source: `c${e.source}`,
+            target: `c${e.target}`,
+            value: e.weight || 0,
+            lineStyle: {
+              color: lineColor,
+              opacity,
+              width: 1 + (e.weight || 0) * 3,
+            },
+          }
+        })
+      }
 
       const option = {
         tooltip: {
