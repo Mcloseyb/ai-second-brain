@@ -1,14 +1,14 @@
 """
 智能笔记页面
 -----------
-左侧: 笔记树形列表（搜索 + 筛选）
+左侧: 笔记树形列表（搜索 + 筛选 + 导入 + 同步按钮）
 右侧: Markdown 编辑器
 """
 
 import asyncio
 import logging
 
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QSplitter, QFrame
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QSplitter, QFileDialog, QMessageBox
 from PySide6.QtCore import Qt
 
 from widgets.note_tree import NoteTreeWidget
@@ -41,6 +41,8 @@ class NotesPage(QWidget):
         self.note_tree = NoteTreeWidget()
         self.note_tree.note_selected.connect(self._on_note_selected)
         self.note_tree.note_created.connect(self._on_new_note)
+        self.note_tree.import_requested.connect(self._on_import)
+        self.note_tree.sync_requested.connect(self._on_sync)
         splitter.addWidget(self.note_tree)
 
         # 右侧 — 编辑器
@@ -75,8 +77,22 @@ class NotesPage(QWidget):
 
     def _on_new_note(self):
         """创建新笔记"""
-        # 先在后端创建，再加载
         asyncio.ensure_future(self._create_new_note())
+
+    def _on_import(self):
+        """导入文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import File",
+            "",
+            "Documents (*.md *.txt *.docx *.pdf);;All Files (*.*)",
+        )
+        if file_path:
+            asyncio.ensure_future(self._import_file(file_path))
+
+    def _on_sync(self):
+        """手动同步到向量库"""
+        asyncio.ensure_future(self._sync_now())
 
     async def _create_new_note(self):
         from services.api_client import api
@@ -120,3 +136,33 @@ class NotesPage(QWidget):
         except Exception as e:
             logger.error(f"Failed to save note: {e}")
             self.editor.save_failed()
+
+    async def _import_file(self, file_path: str):
+        """导入文件到笔记库"""
+        from services.api_client import api
+        try:
+            result = await api.upload("/api/documents/import", file_path, {"folder": "", "tags": ""})
+            note = result.get("note", {})
+            synced = result.get("synced", False)
+            logger.info(f"Imported: {note['title']} (synced={synced})")
+            await self.note_tree.load_notes()
+            QMessageBox.information(
+                self, "Import Success",
+                f"Imported: {note['title']}\nSynced to vector DB: {'Yes' if synced else 'No'}",
+            )
+        except Exception as e:
+            logger.error(f"Failed to import file: {e}")
+            QMessageBox.warning(self, "Import Failed", str(e))
+
+    async def _sync_now(self):
+        """手动触发同步"""
+        from services.api_client import api
+        try:
+            result = await api.post("/api/sync/now")
+            report = result.get("report", {})
+            msg = f"Total: {report['total']}\nSynced: {report['synced']}\nSkipped: {report['skipped']}\nFailed: {report['failed']}"
+            logger.info(f"Sync done: {msg}")
+            QMessageBox.information(self, "Sync Complete", msg)
+        except Exception as e:
+            logger.error(f"Failed to sync: {e}")
+            QMessageBox.warning(self, "Sync Failed", str(e))

@@ -18,8 +18,10 @@ from resources.styles.colors import Colors, Spacing, FontSize, Radius
 class NoteTreeWidget(QWidget):
     """笔记列表组件"""
 
-    note_selected = Signal(int)   # 选中笔记 ID
-    note_created = Signal()       # 请求创建新笔记
+    note_selected = Signal(int)    # 选中笔记 ID
+    note_created = Signal()        # 请求创建新笔记
+    import_requested = Signal()    # 请求导入文件
+    sync_requested = Signal()      # 请求同步到向量库
 
     def __init__(self):
         super().__init__()
@@ -61,6 +63,25 @@ class NoteTreeWidget(QWidget):
         """)
         self.new_btn.clicked.connect(self.note_created.emit)
         header_layout.addWidget(self.new_btn)
+
+        # 导入按钮
+        self.import_btn = QPushButton("📥")
+        self.import_btn.setFixedSize(28, 28)
+        self.import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.import_btn.setToolTip("Import file (md/docx/pdf)")
+        self.import_btn.setStyleSheet(self._btn_style())
+        self.import_btn.clicked.connect(self.import_requested.emit)
+        header_layout.addWidget(self.import_btn)
+
+        # 同步按钮
+        self.sync_btn = QPushButton("🔄")
+        self.sync_btn.setFixedSize(28, 28)
+        self.sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.sync_btn.setToolTip("Sync notes to vector DB")
+        self.sync_btn.setStyleSheet(self._btn_style())
+        self.sync_btn.clicked.connect(self.sync_requested.emit)
+        header_layout.addWidget(self.sync_btn)
+
         layout.addLayout(header_layout)
 
         # 搜索框
@@ -166,3 +187,19 @@ class NoteTreeWidget(QWidget):
         note_id = item.data(Qt.ItemDataRole.UserRole)
         if note_id:
             self.note_selected.emit(note_id)
+
+    @staticmethod
+    def _btn_style() -> str:
+        return f"""
+            QPushButton {{
+                background: {Colors.bg_card};
+                color: {Colors.text_primary};
+                border: none;
+                border-radius: {Radius.md}px;
+                font-size: 14px;
+            }}
+            QPushButton:hover {{
+                background: {Colors.accent_blue};
+                color: {Colors.text_inverse};
+            }}
+        """

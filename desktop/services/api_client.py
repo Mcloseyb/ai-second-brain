@@ -89,6 +89,26 @@ class APIClient:
             logger.error(f"DELETE {path} 失败: {e}")
             raise
 
+    async def upload(self, path: str, file_path: str, fields: dict | None = None) -> dict:
+        """
+        文件上传（multipart/form-data）
+
+        用法:
+            result = await api.upload("/api/documents/import", "D:/notes/test.md", {"folder": "AI", "tags": "AI,LLM"})
+        """
+        import os
+        client = await self._get_client()
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (os.path.basename(file_path), f)}
+                data = fields or {}
+                resp = await client.post(path, data=data, files=files)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPError as e:
+            logger.error(f"Upload {path} 失败: {e}")
+            raise
+
     # ---- 流式请求 (SSE) ----
 
     async def stream_post(
