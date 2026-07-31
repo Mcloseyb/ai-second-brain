@@ -2,10 +2,14 @@
 数据看板 API（P7）
 -----------------
 GET /api/dashboard/stats — 统计概览（笔记/标签/链接/同步）
-GET /api/dashboard/graph — 知识图谱数据（语义互联驱动）
+GET /api/dashboard/graph — 知识图谱数据（语义聚类，用户约束: 不画连线）
 
-图谱连线完全基于笔记 Embedding 余弦相似度（用户约束: 不靠标签互联）。
-标签仅作为节点分类着色，不参与连线。
+图谱设计（用户明确要求）:
+  - 不画连线，靠「颜色 + 位置 + 大小」表达关联
+  - 关联 = Embedding 余弦相似度 >= threshold
+  - 同一连通簇（相互关联）→ 相同颜色（category = 簇N）
+  - 关联次数（被多少篇笔记关联）越多 → 节点越大（symbolSize）
+  - edges 仅用于力导向布局聚簇 + 点击高亮（前端隐藏，不绘制）
 """
 
 import logging
@@ -26,15 +30,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 # 图谱默认参数
-DEFAULT_THRESHOLD = 0.35
-DEFAULT_TOP_K = 3           # 每篇笔记默认连接的最强邻居数
-MAX_EDGES = 200           # 全量边返回上限（悬停展示用，防止大数据量卡顿）
-MIN_SYMBOL = 12           # 无 embedding 的孤点大小
-# 节点大小 = 基础 18 + 字数缩放，乘引用度系数
-BASE_SYMBOL = 18
-WORD_SCALE = 1 / 100      # 每 100 字 +1
-WORD_CAP = 30             # 字数对大小贡献上限
-REF_SCALE = 6             # 每个引用 +6
+DEFAULT_THRESHOLD = 0.62       # 相似度 >= 此值视为「强关联」（用于关联次数 + 布局边）
+DEFAULT_TOP_K = 4              # 每篇笔记用于布局/高亮的最近邻居数
+DEFAULT_CLUSTERS = None        # 簇数（None = 按 sqrt(笔记数) 启发式）
+MIN_CLUSTERS = 2
+MAX_CLUSTERS = 12
+# 节点大小 = 基础 + 关联次数缩放（关联越多 = 越重要 = 越大）
+BASE_SYMBOL = 14
+DEGREE_SCALE = 5               # 每多 1 篇关联 +5
+SIZE_CAP = 50
 
 
 # ============================================================
@@ -68,55 +72,75 @@ async def dashboard_stats(db: Session = Depends(get_db)):
 
 
 # ============================================================
-# 知识图谱（语义互联）
+# 知识图谱（语义聚类，不画连线）
 # ============================================================
 
-def _ref_counts(db: Session) -> dict[int, int]:
-    """计算每篇笔记被引用的次数（note_links.target_note_id 计数）"""
-    counts: dict[int, int] = {}
-    for (target,) in db.query(NoteLink.target_note_id).all():
-        counts[target] = counts.get(target, 0) + 1
-    return counts
+def _kmeans_clusters(
+    ids: list[int],
+    matrix: np.ndarray,
+    n_clusters: int,
+    seed: int = 42,
+) -> dict[int, int]:
+    """
+    基于 Embedding 的 KMeans 聚类（纯 numpy，k-means++ 初始化，固定种子可复现）
+
+    数据中笔记普遍语义相近（bge 向量相似度高），绝对阈值分不开簇，
+    因此用 KMeans 把笔记分成语义组：同簇同色。
+
+    Returns:
+        笔记 → 簇编号（按簇大小降序编号，簇1 最大，稳定可复现）
+    """
+    n = len(ids)
+    k = max(1, min(n_clusters, n))
+    if k <= 1:
+        return {nid: 1 for nid in ids}
+
+    rng = np.random.RandomState(seed)
+    centers = np.zeros((k, matrix.shape[1]))
+
+    # k-means++ 初始化
+    centers[0] = matrix[rng.randint(n)]
+    for c in range(1, k):
+        dist = ((matrix[:, None, :] - centers[None, :c, :]) ** 2).sum(axis=2).min(axis=1)
+        probs = dist / dist.sum()
+        centers[c] = matrix[rng.choice(n, p=probs)]
+
+    labels = np.zeros(n, dtype=int)
+    for _ in range(50):
+        new_labels = (
+            (matrix[:, None, :] - centers[None, :, :]) ** 2
+        ).sum(axis=2).argmin(axis=1)
+        for c in range(k):
+            members = matrix[new_labels == c]
+            if len(members):
+                centers[c] = members.mean(axis=0)
+        if np.array_equal(new_labels, labels):
+            break
+        labels = new_labels
+
+    # 按簇大小降序编号，保证 簇1 最大且稳定
+    unique, counts = np.unique(labels, return_counts=True)
+    order = unique[np.argsort(-counts)]
+    rank = {int(u): i + 1 for i, u in enumerate(order)}
+    return {ids[i]: rank[int(labels[i])] for i in range(n)}
 
 
-def _build_nodes(db: Session, refs: dict[int, int]) -> list[dict]:
-    """构建节点列表（每篇笔记一个节点）"""
-    notes = db.query(Note).order_by(Note.updated_at.desc()).all()
-    nodes: list[dict] = []
-    for note in notes:
-        tag_names = [t.name for t in note.tags] if note.tags else []
-        category = tag_names[0] if tag_names else "未分类"
-        word_size = min((note.word_count or 0) * WORD_SCALE, WORD_CAP)
-        symbol_size = BASE_SYMBOL + word_size + refs.get(note.id, 0) * REF_SCALE
-        nodes.append({
-            "id": note.id,
-            "name": note.title or "无标题",
-            "category": category,
-            "symbolSize": round(min(symbol_size, 80), 1),
-            "word_count": note.word_count or 0,
-            "notebook_id": note.notebook_id,
-            "folder": note.folder or "",
-            "tags": tag_names,
-        })
-    return nodes
-
-
-def _build_edges(
+def _build_graph(
     embeddings: dict[int, list[float]],
     top_k: int,
     threshold: float,
-) -> tuple[list[dict], list[dict]]:
+    clusters: int | None,
+) -> tuple[list[dict], dict[int, int], dict[int, int]]:
     """
-    基于 Embedding 余弦相似度构建连线（纯语义，用户约束）
+    基于 Embedding 余弦相似度构建关联结构（纯语义，用户约束）
 
-    返回两组边:
-      - edges:     每篇笔记只连语义最强的 top_k 个邻居（无向去重）
-                   → 默认图稀疏（边数上限 ≈ N * top_k / 2），不杂乱
-      - all_edges: 全部相似度 >= threshold 的边，供前端悬停节点时
-                   临时亮出该节点的完整语义关联（超限取最强 Top-N）
+    Returns:
+      - edges:      每篇笔记的 Top-K 强关联邻居（仅用于力导向布局 + 点击高亮，前端隐藏连线）
+      - degree:     笔记 → 强关联次数（决定节点大小/重要性）
+      - components: 笔记 → KMeans 簇编号（同簇同色，KMeans 解决「全笔记都相近」分不开的问题）
     """
     if len(embeddings) < 2:
-        return [], []
+        return [], {}, {}
 
     ids = list(embeddings.keys())
     matrix = np.array([embeddings[nid] for nid in ids], dtype=float)
@@ -127,7 +151,7 @@ def _build_edges(
     matrix = matrix / norms
     sim = matrix @ matrix.T
 
-    # ---- 收集所有 >= threshold 的无向边（权重表） ----
+    # ---- 强关联（相似度 >= threshold 才视为关联） ----
     n = len(ids)
     weights: dict[tuple[int, int], float] = {}
     for i in range(n):
@@ -136,7 +160,13 @@ def _build_edges(
             if s >= threshold:
                 weights[(ids[i], ids[j])] = round(s, 4)
 
-    # ---- Top-K: 每个节点取相似度最强的 top_k 个邻居 ----
+    # ---- 关联次数（重要性） ----
+    degree: dict[int, int] = {nid: 0 for nid in ids}
+    for (a, b) in weights:
+        degree[a] += 1
+        degree[b] += 1
+
+    # ---- Top-K 邻居边（布局 + 高亮用） ----
     neighbor_scores: dict[int, list[tuple[float, int]]] = {}
     for (a, b), w in weights.items():
         neighbor_scores.setdefault(a, []).append((w, b))
@@ -153,59 +183,84 @@ def _build_edges(
         for a, b in sorted(selected)
     ]
 
-    # ---- 全量边（悬停展示用） ----
-    all_edges = [
-        {"source": a, "target": b, "weight": w}
-        for (a, b), w in sorted(weights.items(), key=lambda kv: kv[1], reverse=True)
-    ]
-    if len(all_edges) > MAX_EDGES:
-        all_edges = all_edges[:MAX_EDGES]
+    # ---- KMeans 语义分簇（颜色分组） ----
+    n_clusters = clusters if clusters else max(
+        MIN_CLUSTERS, min(round(np.sqrt(n)), MAX_CLUSTERS)
+    )
+    components = _kmeans_clusters(ids, matrix, n_clusters)
 
-    return edges, all_edges
+    return edges, degree, components
+
+
+def _build_nodes(
+    db: Session,
+    degree: dict[int, int],
+    components: dict[int, int],
+) -> list[dict]:
+    """构建节点（同簇同色，关联次数决定大小）"""
+    notes = db.query(Note).order_by(Note.updated_at.desc()).all()
+    nodes: list[dict] = []
+    for note in notes:
+        tag_names = [t.name for t in note.tags] if note.tags else []
+        comp = components.get(note.id)
+        category = f"簇{comp}" if comp is not None else "未关联"
+        d = degree.get(note.id, 0)
+        symbol = BASE_SYMBOL + min(d * DEGREE_SCALE, SIZE_CAP - BASE_SYMBOL)
+        nodes.append({
+            "id": note.id,
+            "name": note.title or "无标题",
+            "category": category,
+            "symbolSize": round(symbol, 1),
+            "degree": d,
+            "word_count": note.word_count or 0,
+            "notebook_id": note.notebook_id,
+            "folder": note.folder or "",
+            "tags": tag_names,
+        })
+    return nodes
 
 
 @router.get("/graph")
 async def dashboard_graph(
     notebook_id: int | None = Query(default=None, description="按笔记库筛选，默认全部"),
-    threshold: float = Query(default=DEFAULT_THRESHOLD, ge=0.1, le=1.0, description="全量边相似度阈值"),
-    top_k: int = Query(default=DEFAULT_TOP_K, ge=1, le=10, description="每篇笔记连接的最强邻居数"),
+    threshold: float = Query(default=DEFAULT_THRESHOLD, ge=0.1, le=1.0, description="相似度 >= 此值视为强关联"),
+    top_k: int = Query(default=DEFAULT_TOP_K, ge=1, le=10, description="每篇笔记的语义邻居数（布局/高亮）"),
+    clusters: int | None = Query(default=DEFAULT_CLUSTERS, ge=MIN_CLUSTERS, le=MAX_CLUSTERS, description="簇数（默认按 sqrt(笔记数) 启发式）"),
     db: Session = Depends(get_db),
 ):
     """
-    知识图谱数据（语义互联 + Top-K 邻居）
+    知识图谱数据（语义聚类，不画连线）
 
     节点 = 每篇笔记。
-    edges = 每篇笔记与其语义最强的 top_k 个邻居连线（默认稀疏，不杂乱）。
-    all_edges = 全部相似度 >= threshold 的边（供前端悬停节点时展示完整关联）。
-    标签仅作节点分类着色（category），不参与连线（用户明确约束）。
+    - category    = KMeans 簇编号（同簇 = 语义相近，同色；解决「笔记普遍相近」绝对阈值分不开的问题）
+    - symbolSize  = 强关联次数（被多少篇笔记强关联，越多越大 = 越重要）
+    - degree      = 强关联次数（tooltip 展示）
+    edges = Top-K 强关联邻居，仅用于力导向布局聚簇 + 点击高亮（前端隐藏连线）。
 
     Returns:
         {
-          "nodes": [{"id", "name", "category", "symbolSize", "word_count", "notebook_id", "folder", "tags"}],
-          "edges": [{"source", "target", "weight"}],
-          "all_edges": [{"source", "target", "weight"}]
+          "nodes": [{"id", "name", "category", "symbolSize", "degree", "word_count", "notebook_id", "folder", "tags"}],
+          "edges": [{"source", "target", "weight"}]
         }
     """
-    refs = _ref_counts(db)
-    nodes = _build_nodes(db, refs)
-
-    # 只取本笔记库的节点计算边（排除自身之外的索引）
+    # 只取本笔记库的节点计算关联（范围过滤）
     if notebook_id:
-        keep_ids = {n["id"] for n in nodes if n["notebook_id"] == notebook_id}
+        keep_ids = set()
+        for (note_id,) in db.query(Note.id).filter(Note.notebook_id == notebook_id).all():
+            keep_ids.add(note_id)
     else:
-        keep_ids = {n["id"] for n in nodes}
+        keep_ids = {nid for (nid,) in db.query(Note.id).all()}
 
     embeddings = rag_engine.get_all_embeddings()
-    # 只保留范围内且非空向量的笔记
     scope_embeddings = {
         nid: vec for nid, vec in embeddings.items()
         if nid in keep_ids
     }
-    edges, all_edges = _build_edges(scope_embeddings, top_k, threshold)
+    edges, degree, components = _build_graph(scope_embeddings, top_k, threshold, clusters)
+    nodes = _build_nodes(db, degree, components)
 
     logger.info(
-        f"图谱数据: {len(nodes)} 节点, {len(edges)} 条 Top-K 边, "
-        f"{len(all_edges)} 条全量边 "
-        f"(threshold={threshold}, top_k={top_k}, notebook_id={notebook_id})"
+        f"图谱数据: {len(nodes)} 节点, {len(edges)} 条布局边, {len(set(components.values()))} 簇 "
+        f"(threshold={threshold}, top_k={top_k}, clusters={clusters}, notebook_id={notebook_id})"
     )
-    return {"nodes": nodes, "edges": edges, "all_edges": all_edges}
+    return {"nodes": nodes, "edges": edges}

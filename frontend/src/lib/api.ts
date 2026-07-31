@@ -143,10 +143,10 @@ export const dashboardApi = {
   stats: () => client.get('/api/dashboard/stats') as Promise<DashboardStatsResponse>,
 
   /**
-   * 知识图谱（语义互联 + Top-K 邻居）
-   * top_k = 每篇笔记连接的最强邻居数（默认 3）；threshold = 全量边相似度下限
+   * 知识图谱（语义聚类，不画连线）
+   * threshold = 强关联阈值；top_k = 布局/高亮邻居数；clusters = 分簇数（默认按笔记数）
    */
-  graph: (params: { notebook_id?: number | null; threshold?: number; top_k?: number } = {}) =>
+  graph: (params: { notebook_id?: number | null; threshold?: number; top_k?: number; clusters?: number } = {}) =>
     client.get('/api/dashboard/graph', { params }) as Promise<GraphResponse>,
 }
 

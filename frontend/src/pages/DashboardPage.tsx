@@ -1,9 +1,10 @@
 /**
  * DashboardPage — 数据看板页面（P7 真实图谱）
  * ------------------------------------------
- * 整页只保留知识图谱（语义互联，Top-K 邻居 + 悬停显边）。
- * 图谱筛选: 邻居数 K 滑块（控制默认边密度）+ 标签多选（过滤节点）。
- * 悬停节点 → 临时亮出该节点全部语义关联。点击节点 → 跳转打开笔记。
+ * 整页只保留知识图谱（语义聚类，不画连线）。
+ * 关联表达：同簇同色 + 位置聚集 + 关联次数越大节点越大。
+ * 交互：点击节点高亮其关联（突出显示）；再次点击同一节点 → 跳转打开笔记。
+ * 筛选：簇数滑块（KMeans 分组粒度）+ 标签多选（过滤节点）。
  */
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -26,8 +27,8 @@ import {
 import type { Tag, GraphNode, GraphEdge } from '@/types'
 import { cn } from '@/lib/utils'
 
-// 邻居数 K 档位（每篇笔记连接的语义最近邻居数，控制默认边密度）
-const TOP_K_OPTIONS = [1, 2, 3, 4, 5]
+// 簇数档位（KMeans 语义分簇数量，决定图上有几堆颜色）
+const CLUSTER_OPTIONS = [2, 3, 4, 5, 6]
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -36,31 +37,29 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [tags, setTags] = useState<Tag[]>([])
   const [allNodes, setAllNodes] = useState<GraphNode[]>([])
-  const [topKEdges, setTopKEdges] = useState<GraphEdge[]>([])
-  const [allEdges, setAllEdges] = useState<GraphEdge[]>([])
+  const [edges, setEdges] = useState<GraphEdge[]>([])
 
   // ---- 筛选状态（纯客户端） ----
-  const [topK, setTopK] = useState(3)
+  const [clusterCount, setClusterCount] = useState(3)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const [graphRes, tagsRes] = await Promise.all([
-        // threshold=0.2 拉足全量弱边供悬停展示；默认展示边由后端按 top_k 算好
-        dashboardApi.graph({ threshold: 0.2, top_k: topK }),
+        // threshold=0.62 判定强关联；簇数由用户控制 KMeans 分组粒度
+        dashboardApi.graph({ threshold: 0.62, clusters: clusterCount }),
         tagsApi.list(),
       ])
       setTags(tagsRes.tags || [])
       setAllNodes(graphRes.nodes || [])
-      setTopKEdges(graphRes.edges || [])
-      setAllEdges(graphRes.all_edges || [])
+      setEdges(graphRes.edges || [])
     } catch (e) {
       console.error('加载看板数据失败:', e)
     } finally {
       setLoading(false)
     }
-  }, [topK])
+  }, [clusterCount])
 
   useEffect(() => {
     loadData()
@@ -71,12 +70,8 @@ export default function DashboardPage() {
     ? allNodes
     : allNodes.filter((n) => n.tags?.some((t) => selectedTags.includes(t)))
   const nodeIdSet = new Set(filteredNodes.map((n) => n.id))
-  // 默认展示边（Top-K，已稀疏），仅按标签过滤
-  const filteredEdges = topKEdges.filter(
-    (e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target),
-  )
-  // 悬停展示的完整关联边，同样按标签过滤
-  const filteredAllEdges = allEdges.filter(
+  // 布局/高亮用语义邻居边，仅按标签过滤
+  const filteredEdges = edges.filter(
     (e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target),
   )
 
@@ -89,7 +84,7 @@ export default function DashboardPage() {
     )
   }
 
-  // ---- 点击节点 → 打开笔记 ----
+  // ---- 二次点击节点 → 打开笔记 ----
   const handleNodeClick = useCallback((noteId: number) => {
     setSelectedId(noteId)
     navigate('/notes')
@@ -97,25 +92,30 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 overflow-auto">
-      {/* ======== 知识图谱（语义互联，整页） ======== */}
+      {/* ======== 知识图谱（语义聚类，整页） ======== */}
       <Card className="flex-1 min-h-[400px] flex flex-col">
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-medium">知识图谱（语义互联）</CardTitle>
+          <CardTitle className="text-sm font-medium">
+            知识图谱
+            <span className="ml-2 text-[10px] text-muted-foreground font-normal">
+              同簇同色 · 点击高亮关联 · 再次点击打开笔记
+            </span>
+          </CardTitle>
           <div className="flex items-center gap-2">
-            {/* 邻居数 K 滑块（控制默认边密度） */}
+            {/* 簇数滑块（KMeans 分组粒度） */}
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <SlidersHorizontal className="size-3.5" />
-              邻居数
+              簇数
               <input
                 type="range"
                 min={0}
-                max={TOP_K_OPTIONS.length - 1}
+                max={CLUSTER_OPTIONS.length - 1}
                 step={1}
-                value={TOP_K_OPTIONS.indexOf(topK)}
-                onChange={(e) => setTopK(TOP_K_OPTIONS[Number(e.target.value)])}
+                value={CLUSTER_OPTIONS.indexOf(clusterCount)}
+                onChange={(e) => setClusterCount(CLUSTER_OPTIONS[Number(e.target.value)])}
                 className="w-28 accent-primary"
               />
-              <span className="w-4">{topK}</span>
+              <span className="w-4">{clusterCount}</span>
             </div>
             {/* 标签筛选下拉 */}
             <DropdownMenu>
@@ -166,7 +166,6 @@ export default function DashboardPage() {
           <KnowledgeGraph
             nodes={graphNodes}
             edges={graphEdges}
-            allEdges={filteredAllEdges}
             loading={loading}
             className="h-full"
             onNodeClick={handleNodeClick}

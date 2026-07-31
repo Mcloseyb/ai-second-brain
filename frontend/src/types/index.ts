@@ -207,9 +207,11 @@ export interface DashboardStats {
 export interface GraphNode {
   id: number
   name: string
-  /** 节点分类（= 第一个标签名；无标签为 "未分类"），仅用于着色 */
+  /** 节点分类 = 语义连通簇（"簇N"），同簇同色；无关联为 "未关联" */
   category: string
   symbolSize: number
+  /** 关联次数（被多少篇笔记关联，越大越重要） */
+  degree?: number
   word_count: number
   notebook_id: number | null
   folder: string
@@ -225,10 +227,8 @@ export interface GraphEdge {
 
 export interface GraphData {
   nodes: GraphNode[]
-  /** 默认展示边：每篇笔记 Top-K 语义邻居（稀疏） */
+  /** 语义邻居边：仅用于布局聚簇 + 点击高亮，不绘制 */
   edges: GraphEdge[]
-  /** 全量语义边（>= 阈值），供悬停节点时展示完整关联 */
-  all_edges?: GraphEdge[]
 }
 
 export interface DashboardStatsResponse extends DashboardStats {}
