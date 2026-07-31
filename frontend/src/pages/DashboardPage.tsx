@@ -1,7 +1,7 @@
 /**
  * DashboardPage — 数据看板页面（P7 真实图谱）
  * ------------------------------------------
- * 统计卡片（真实 stats API）+ 知识图谱（语义互联，Top-K 邻居 + 悬停显边）。
+ * 整页只保留知识图谱（语义互联，Top-K 邻居 + 悬停显边）。
  * 图谱筛选: 邻居数 K 滑块（控制默认边密度）+ 标签多选（过滤节点）。
  * 悬停节点 → 临时亮出该节点全部语义关联。点击节点 → 跳转打开笔记。
  */
@@ -15,16 +15,10 @@ import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import StatCard from '@/components/dashboard/StatCard'
 import KnowledgeGraph from '@/components/dashboard/KnowledgeGraph'
 import { dashboardApi, tagsApi } from '@/lib/api'
 import { useNotesStore } from '@/stores/notes'
 import {
-  FileText,
-  CheckCircle2,
-  RefreshCw,
-  Tags,
-  Link2,
   SlidersHorizontal,
   ChevronDown,
   Check,
@@ -40,7 +34,6 @@ export default function DashboardPage() {
   const setSelectedId = useNotesStore((s) => s.setSelectedId)
 
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({ total_notes: 0, total_tags: 0, total_links: 0, synced: 0, pending: 0 })
   const [tags, setTags] = useState<Tag[]>([])
   const [allNodes, setAllNodes] = useState<GraphNode[]>([])
   const [topKEdges, setTopKEdges] = useState<GraphEdge[]>([])
@@ -53,13 +46,11 @@ export default function DashboardPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [statsRes, graphRes, tagsRes] = await Promise.all([
-        dashboardApi.stats(),
+      const [graphRes, tagsRes] = await Promise.all([
         // threshold=0.2 拉足全量弱边供悬停展示；默认展示边由后端按 top_k 算好
         dashboardApi.graph({ threshold: 0.2, top_k: topK }),
         tagsApi.list(),
       ])
-      setStats(statsRes)
       setTags(tagsRes.tags || [])
       setAllNodes(graphRes.nodes || [])
       setTopKEdges(graphRes.edges || [])
@@ -105,23 +96,9 @@ export default function DashboardPage() {
   }, [setSelectedId, navigate])
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-auto">
-      {/* ======== 统计卡片 ======== */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard icon={FileText} label="笔记总数" value={stats.total_notes} color="text-blue-600 dark:text-blue-400" loading={loading} />
-        <StatCard icon={Link2} label="关联数" value={stats.total_links} color="text-violet-600 dark:text-violet-400" loading={loading} subtitle="双向链接" />
-        <StatCard icon={Tags} label="标签数" value={stats.total_tags} color="text-purple-600 dark:text-purple-400" loading={loading} />
-        <StatCard
-          icon={syncIcon(stats.pending)}
-          label={stats.pending > 0 ? `待同步 ${stats.pending}` : '已同步'}
-          value={stats.pending > 0 ? stats.pending : stats.synced}
-          color={stats.pending > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}
-          loading={loading}
-        />
-      </div>
-
-      {/* ======== 知识图谱（语义互联） ======== */}
-      <Card className="flex-1 min-h-[400px]">
+    <div className="flex h-full flex-col gap-4 p-4 overflow-auto">
+      {/* ======== 知识图谱（语义互联，整页） ======== */}
+      <Card className="flex-1 min-h-[400px] flex flex-col">
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-medium">知识图谱（语义互联）</CardTitle>
           <div className="flex items-center gap-2">
@@ -185,7 +162,7 @@ export default function DashboardPage() {
           </div>
         </CardHeader>
         <Separator />
-        <CardContent className="p-4 h-[420px]">
+        <CardContent className="p-4 flex-1 min-h-0">
           <KnowledgeGraph
             nodes={graphNodes}
             edges={graphEdges}
@@ -198,9 +175,4 @@ export default function DashboardPage() {
       </Card>
     </div>
   )
-}
-
-/** 待同步>0 时显示刷新图标 */
-function syncIcon(pending: number) {
-  return pending > 0 ? RefreshCw : CheckCircle2
 }

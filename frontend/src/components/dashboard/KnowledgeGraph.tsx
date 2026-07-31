@@ -3,7 +3,8 @@
  * ---------------------------------------------------------------------
  * 节点 = 笔记（标签分类着色 + 字数/引用度决定大小）
  * 默认连线 = 每篇笔记 Top-K 语义邻居（稀疏，后端算好，避免全图过密）
- * 悬停节点 = 临时亮出该节点的全部语义关联（粗细=相似度），移出后恢复默认
+ * 悬停节点 = 通过一个 layout:'none' 的叠加系列临时画上该节点的完整语义关联
+ *            （按主系列节点坐标绘制，不触发力导向重新布局 → 节点不跳动）
  */
 import { useRef, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -45,6 +46,31 @@ type EChart = {
   resize: () => void
   dispose: () => void
   on: (e: string, cb: (p: unknown) => void) => void
+  getModel: () => {
+    getSeriesByIndex: (i: number) => {
+      getData: () => {
+        count: () => number
+        getItemLayout: (i: number) => { x: number; y: number } | undefined
+        getRawDataItem: (i: number) => { id?: string | number } | undefined
+      }
+    } | undefined
+  }
+}
+
+/** 读取主系列（力导向）当前各节点坐标，供叠加系列按相同位置画线 */
+function readNodePositions(chart: EChart): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>()
+  const series = chart.getModel().getSeriesByIndex(0)
+  if (!series) return positions
+  const data = series.getData()
+  for (let i = 0; i < data.count(); i++) {
+    const layout = data.getItemLayout(i)
+    const raw = data.getRawDataItem(i)
+    if (layout && raw && raw.id !== undefined) {
+      positions.set(String(raw.id), { x: layout.x, y: layout.y })
+    }
+  }
+  return positions
 }
 
 export default function KnowledgeGraph({
@@ -62,11 +88,11 @@ export default function KnowledgeGraph({
     if (!chartRef.current || loading) return
 
     let chart: EChart | null = null
-    let restoreTimer: number | undefined
+    let clearTimer: number | undefined
 
     import('echarts').then((echarts) => {
       if (!chartRef.current) return
-      chart = echarts.init(chartRef.current, undefined, { renderer: 'canvas' })
+      chart = echarts.init(chartRef.current, undefined, { renderer: 'canvas' }) as unknown as EChart
 
       const buildLinks = (edgeList: GraphEdge[]) =>
         edgeList.map((e) => ({
@@ -104,6 +130,7 @@ export default function KnowledgeGraph({
         },
         series: [
           {
+            // 主系列: 力导向布局 + 默认 Top-K 边。悬停显边走叠加系列，此系列永不改动 → 不触发重新布局
             type: 'graph',
             layout: 'force',
             roam: true,
@@ -132,6 +159,17 @@ export default function KnowledgeGraph({
               lineStyle: { width: 3 },
             },
           },
+          {
+            // 叠加系列: 悬停显边（layout:'none'，按主系列节点坐标绘制，不参与布局）
+            type: 'graph',
+            layout: 'none',
+            silent: true,
+            z: 1,
+            data: [],
+            links: [],
+            label: { show: false },
+            tooltip: { show: false },
+          },
         ],
       }
 
@@ -147,35 +185,55 @@ export default function KnowledgeGraph({
         })
       }
 
-      // ---- 悬停节点 → 亮出该节点全部语义关联；移出 → 恢复默认 Top-K ----
+      // ---- 悬停节点 → 叠加系列亮出完整关联；移出 → 清空叠加系列 ----
+      const clearReveal = () => {
+        chart?.setOption({ series: [{}, { data: [], links: [] }] })
+      }
+
       chart.on('mouseover', (raw: unknown) => {
         const params = raw as { dataType?: string; data?: { id?: string | number } }
         if (params.dataType !== 'node') return
         const id = Number(params.data?.id)
         if (Number.isNaN(id)) return
-        // 取消恢复定时器：从节点 A 直接移到节点 B 时，不应先恢复默认再亮出（会闪烁）
-        window.clearTimeout(restoreTimer)
-        // 该节点的完整关联（按相似度降序，最多 REVEAL_MAX 条）
+        // 取消清空定时器：从节点 A 直接移到节点 B 时，不先清空再亮出
+        window.clearTimeout(clearTimer)
+
+        // 该节点的完整关联（按相似度降序，最多 REVEAL_MAX 条），去掉默认 Top-K 已画的部分
         const incident = (allEdges || [])
           .filter((e) => e.source === id || e.target === id)
           .sort((a, b) => (b.weight || 0) - (a.weight || 0))
           .slice(0, REVEAL_MAX)
-        // 与默认 Top-K 边合并去重（默认边保留，追加该节点独有的关联）
         const defaultKeys = new Set(edges.map((e) => pairKey(e.source, e.target)))
-        const merged = [
-          ...edges,
-          ...incident.filter((e) => !defaultKeys.has(pairKey(e.source, e.target))),
-        ]
-        chart?.setOption({ series: [{ links: buildLinks(merged) }] })
+        const revealed = incident.filter((e) => !defaultKeys.has(pairKey(e.source, e.target)))
+        if (revealed.length === 0) {
+          clearReveal()
+          return
+        }
+
+        // 读取主系列当前节点坐标，叠加系列按相同坐标画线 → 不触发主系列重新布局
+        const positions = readNodePositions(chart!)
+        const involved = Array.from(new Set(revealed.flatMap((e) => [e.source, e.target])))
+        const overlayData = involved.map((nid) => {
+          const p = positions.get(String(nid))
+          return { id: String(nid), x: p?.x ?? 0, y: p?.y ?? 0, symbolSize: 0 }
+        })
+        const overlayLinks = revealed.map((e) => ({
+          source: String(e.source),
+          target: String(e.target),
+          value: e.weight || 0,
+          lineStyle: {
+            width: Math.max(0.5, (e.weight || 0) * 3),
+            curveness: 0.2,
+          },
+        }))
+        chart?.setOption({ series: [{}, { data: overlayData, links: overlayLinks }] })
       })
 
       chart.on('mouseout', (raw: unknown) => {
         const params = raw as { dataType?: string }
         if (params.dataType !== 'node') return
-        // 延迟 120ms 恢复默认：期间若又悬停到相邻节点，上面的 clearTimeout 会取消恢复
-        restoreTimer = window.setTimeout(() => {
-          chart?.setOption({ series: [{ links: buildLinks(edges) }] })
-        }, 120)
+        // 延迟清空：期间若悬停到相邻节点，上面的 clearTimeout 会取消
+        clearTimer = window.setTimeout(clearReveal, 150)
       })
 
       instanceRef.current = chart
@@ -188,7 +246,7 @@ export default function KnowledgeGraph({
     })
 
     return () => {
-      window.clearTimeout(restoreTimer)
+      window.clearTimeout(clearTimer)
       if (chart) chart.dispose()
       instanceRef.current = null
     }
@@ -198,7 +256,7 @@ export default function KnowledgeGraph({
     return (
       <Card className={cn('min-h-[400px]', className)}>
         <CardContent className="flex items-center justify-center h-full p-4">
-          <Skeleton className="h-[350px] w-full" />
+          <Skeleton className="h-full w-full" />
         </CardContent>
       </Card>
     )
@@ -215,9 +273,9 @@ export default function KnowledgeGraph({
   }
 
   return (
-    <Card className={cn('min-h-[400px]', className)}>
-      <CardContent className="p-0 h-full">
-        <div ref={chartRef} className="w-full h-[400px]" />
+    <Card className={cn('min-h-[400px] flex flex-col', className)}>
+      <CardContent className="p-0 flex-1 min-h-0">
+        <div ref={chartRef} className="w-full h-full" />
       </CardContent>
     </Card>
   )
