@@ -170,16 +170,22 @@ async def search_notes(data: NoteSearchRequest, db: Session = Depends(get_db)):
 # ============================================================
 
 @router.post("/{note_id}/auto-tag")
-async def auto_tag_note(note_id: int, db: Session = Depends(get_db)):
+async def auto_tag_note(
+    note_id: int,
+    mode: str = Query(default="simple", pattern="^(simple|llm)$"),
+    db: Session = Depends(get_db),
+):
     """
     AI 自动标签推荐 — 根据笔记内容推荐 3-5 个标签
 
-    简易版技术方案: jieba TF-IDF 关键词提取 + Embedding 语义匹配已有标签，
-    零 LLM token（纯规则 + 一次 Embedding API 调用）。
+    mode 参数:
+      - simple: 简易版（默认）— jieba TF-IDF + Embedding，零 LLM token
+      - llm:    完整版 — Function Calling + LLM 决策（deepseek-chat, temp=0），
+                可返回合并建议、创建新标签
 
-    Returns:
+    Returns (simple):
         {
-          "note_id": 1,
+          "note_id": 1, "mode": "simple",
           "suggestions": [
             {"tag": "深度学习", "type": "existing", "tag_id": 3,
              "keyword": "神经网络", "score": 0.82},
@@ -187,10 +193,16 @@ async def auto_tag_note(note_id: int, db: Session = Depends(get_db)):
              "keyword": "transformer", "score": 0.62}
           ]
         }
+
+    Returns (llm):
+        在 simple 基础上增加 merge_suggestions（去重合并建议）与 steps（审计）。
     """
     note = note_service.get_by_id(db, note_id)
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
 
+    if mode == "llm":
+        return await tag_agent.suggest_tags_llm(db, note)
+
     suggestions = await tag_agent.suggest_tags(db, note)
-    return {"note_id": note_id, "suggestions": suggestions}
+    return {"note_id": note_id, "mode": "simple", "suggestions": suggestions}

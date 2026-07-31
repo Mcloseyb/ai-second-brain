@@ -11,7 +11,7 @@ import VditorEditor from '@/components/notes/VditorEditor'
 import EditorContextMenu from '@/components/notes/EditorContextMenu'
 import TagSuggestBar from '@/components/notes/TagSuggestBar'
 import FileDropZone from '@/components/documents/FileDropZone'
-import { notesApi } from '@/lib/api'
+import { notesApi, tagsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -21,9 +21,10 @@ import {
   Upload,
   RefreshCw,
   NotebookPen,
+  Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { TagSuggestion } from '@/types'
+import type { TagSuggestion, MergeSuggestion } from '@/types'
 
 export default function NotesPage() {
   const {
@@ -47,6 +48,7 @@ export default function NotesPage() {
 
   // ---- AI 标签推荐（P4）----
   const [tagSuggestions, setTagSuggestions] = useState<TagSuggestion[]>([])
+  const [mergeSuggestions, setMergeSuggestions] = useState<MergeSuggestion[]>([])
   const [tagSuggesting, setTagSuggesting] = useState(false)
 
   // ---- 加载选中笔记内容 ----
@@ -58,6 +60,7 @@ export default function NotesPage() {
       setNoteTags([])
       setDirty(false)
       setTagSuggestions([])
+      setMergeSuggestions([])
       return
     }
 
@@ -69,6 +72,7 @@ export default function NotesPage() {
         setEditTags((note.tags || []).map((t) => t.name).join(', '))
         setDirty(false)
         setTagSuggestions([])
+        setMergeSuggestions([])
       }
     })
   }, [selectedId])
@@ -99,16 +103,34 @@ export default function NotesPage() {
     }
   }, [selectedId, editTitle, editContent, editTags, updateNote])
 
-  // ---- P4: AI 标签推荐 ----
-  const fetchTagSuggestions = useCallback(async (noteId: number) => {
+  // ---- P4: AI 标签推荐（mode: simple=简易版 / llm=完整版） ----
+  const fetchTagSuggestions = useCallback(async (noteId: number, mode: 'simple' | 'llm' = 'simple') => {
     setTagSuggesting(true)
     try {
-      const res = await notesApi.autoTag(noteId)
+      const res = await notesApi.autoTag(noteId, mode)
       setTagSuggestions(res.suggestions || [])
+      setMergeSuggestions(res.merge_suggestions || [])
     } catch {
       setTagSuggestions([]) // 失败静默，不影响编辑
+      setMergeSuggestions([])
     } finally {
       setTagSuggesting(false)
+    }
+  }, [])
+
+  /** 应用标签合并建议（from → to） */
+  const applyMerge = useCallback(async (from: string, to: string) => {
+    try {
+      const res = await tagsApi.merge(from, to)
+      setMergeSuggestions((prev) =>
+        prev.filter((m) => !(m.from === from && m.to === to)),
+      )
+      toast.success(
+        `已合并标签: ${res.from} → ${res.to}` +
+          (res.merged > 0 ? `（迁移 ${res.merged} 篇笔记）` : ''),
+      )
+    } catch (e) {
+      toast.error('合并失败: ' + (e as Error).message)
     }
   }, [])
 
@@ -235,18 +257,31 @@ export default function NotesPage() {
               <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={handleDelete} title="删除">
                 <Trash2 className="size-3.5" />
               </Button>
+              <Button
+                variant="ghost" size="icon" className="size-7 text-violet-500 hover:text-violet-600"
+                onClick={() => fetchTagSuggestions(selectedId, 'llm')}
+                disabled={tagSuggesting}
+                title="AI 打标签（完整版 · LLM 分析）"
+              >
+                <Sparkles className={`size-3.5 ${tagSuggesting ? 'animate-pulse' : ''}`} />
+              </Button>
               <Button size="icon" className="size-7" onClick={handleSave} disabled={saving || !dirty} title="保存 (Ctrl+S)">
                 <Save className="size-3.5" />
               </Button>
             </div>
 
-            {/* AI 标签推荐条（保存后自动弹出） */}
+            {/* AI 标签推荐条（保存后自动弹出 / 点击 Sparkles 手动触发完整版） */}
             <TagSuggestBar
               suggestions={tagSuggestions}
+              mergeSuggestions={mergeSuggestions}
               loading={tagSuggesting}
               onAccept={(tag) => applyTags([tag])}
               onAcceptAll={() => applyTags(tagSuggestions.map((s) => s.tag))}
-              onDismiss={() => setTagSuggestions([])}
+              onDismiss={() => {
+                setTagSuggestions([])
+                setMergeSuggestions([])
+              }}
+              onApplyMerge={applyMerge}
             />
 
             {/* 编辑区域：占满全部剩余空间 */}

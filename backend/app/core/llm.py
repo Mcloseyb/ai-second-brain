@@ -96,6 +96,56 @@ class LLMService:
                     yield f"\n\n[错误] AI 服务暂时不可用，请稍后重试: {e}"
 
     # ============================================================
+    # 工具调用（Function Calling — Agent 专用）
+    # ============================================================
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict],
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ):
+        """
+        带工具调用的普通对话（DeepSeek OpenAI 兼容 Function Calling）
+
+        Args:
+            messages: 对话消息列表（system / user / assistant / tool）
+            tools: OpenAI 工具定义列表
+                    [{"type": "function", "function": {name, description, parameters}}]
+            temperature: 工具调用用低温（默认 0，确定性决策）
+            max_tokens: 最大生成 token 数
+
+        Returns:
+            message 对象 — 可能含 .content（最终回答）或 .tool_calls（工具调用）
+
+        Raises:
+            Exception: 重试 3 次仍失败时抛出，由 Agent 上层决定降级策略
+        """
+        max_tok = max_tokens if max_tokens is not None else settings.max_tokens
+
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    max_tokens=max_tok,
+                    stream=False,
+                )
+                return response.choices[0].message
+
+            except Exception as e:
+                logger.warning(
+                    f"LLM 工具调用失败 (第 {attempt}/{self.max_retries} 次): {e}"
+                )
+                if attempt < self.max_retries:
+                    await asyncio.sleep(self.retry_delay * attempt)
+                else:
+                    logger.error(f"LLM 工具调用最终失败: {e}")
+                    raise  # 交由 Agent 上层降级处理
+
+    # ============================================================
     # 普通对话（非流式 — 用于工具调用、Agent 内部通信等）
     # ============================================================
     async def chat(

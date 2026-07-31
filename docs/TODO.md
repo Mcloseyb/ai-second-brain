@@ -13,7 +13,7 @@
 | P1 | 基础通信 | ✅ | 12/12 | SSE流式对话 |
 | P2 | 笔记系统 | ✅ | 10/10 | CRUD + 编辑器 |
 | **P3** | **文档导入+RAG检索** | **✅** | **17/17** | 语义搜索 + BM25 混合检索 |
-| P4 | AI 自动标签 | ⏳ | 4/8 | 简易版完成（jieba TF-IDF + Embedding） |
+| P4 | AI 自动标签 | ✅ | 8/8 | 简易版 + 完整版(Function Calling) |
 | P5 | 智能双向链接 | ⏳ | 0/8 | 自动发现关联笔记 |
 | P6 | AI 出题自测 | ⏳ | 0/7 | 根据笔记生成题目 |
 | P7 | 真实知识图谱 | ⏳ | 0/6 | 标签+语义双驱图谱 |
@@ -116,19 +116,21 @@
 - [x] 4.0.4 前端 TagSuggestBar — 保存后自动弹出推荐条（单个采纳 / 全部采纳 / 忽略）
 - [x] 4.0.5 采纳标签通过现有 updateNote 批量应用（合并去重）
 
-### 4.1 Function Calling 基础设施（完整版，待做）
-- [ ] 4.1.1 实现 agents/base.py — ReAct Agent 基类
-- [ ] 4.1.2 实现工具注册机制 ToolRegistry
-- [ ] 4.1.3 定义标签推荐工具 suggest_tags(content, existing_tags)
-- [ ] 4.1.4 实现标签推荐 System Prompt
+### 4.1 Function Calling 基础设施 ✅
+- [x] 4.1.1 实现 agents/base.py — ReAct Agent 基类（ToolDefinition/AgentStep/AgentOutput）
+- [x] 4.1.2 实现工具注册机制 ToolRegistry（register/schemas/execute）
+- [x] 4.1.3 定义标签推荐工具 suggest_tags + create_tag + merge_tags（闭包绑定 db）
+- [x] 4.1.4 实现标签推荐 System Prompt（完整版 LLM 决策）
 
 ### 4.2 API
-- [x] 4.2.1 POST /api/notes/{id}/auto-tag — 返回推荐标签列表（简易版已实现）
+- [x] 4.2.1 POST /api/notes/{id}/auto-tag — mode=simple（简易版）/ mode=llm（完整版）
 - [x] 4.2.2 批量应用标签 — 通过 PUT /api/notes/{id} 的 tags 数组实现（无需独立端点）
+- [x] 4.2.3 POST /api/tags/merge — 合并重复标签（from→to，笔记自动迁移）
 
 ### 4.3 前端
 - [x] 4.3.1 保存笔记后自动弹窗"AI 推荐了 3 个标签"
 - [x] 4.3.2 一键采纳 / 手动调整 / 忽略
+- [x] 4.3.3 "AI 打标签"按钮触发完整版 + 推荐理由展示 + merge 建议一键合并
 
 ---
 
@@ -231,3 +233,4 @@
 | 2026-07-31 | P3.1.3~3.2.1 完成：笔记自动向量化闭环 + 语义搜索 API；P3 14/17 |
 | 2026-07-31 | P3.2.3 混合检索完成，P3 全绿 17/17；笔记库/文件夹树/右键菜单完成 |
 | 2026-07-31 | P4 简易版完成（4/8）：jieba TF-IDF + Embedding 标签推荐 Agent + auto-tag API + 前端 TagSuggestBar |
+| 2026-07-31 | P4 完整版完成（8/8）：ReAct Agent 基类 + ToolRegistry + Function Calling 标签推荐 + merge 去重合并 |

@@ -24,7 +24,9 @@ Tag Agent — AI 自动标签推荐（P4 简易版）
   }
 """
 
+import json
 import logging
+import re
 
 import jieba
 import jieba.analyse
@@ -34,6 +36,7 @@ from sqlalchemy.orm import Session
 from app.models.note import Note
 from app.models.tag import Tag
 from app.core.embedding import embedding_service
+from app.agents.base import ToolDefinition, build_agent
 
 logger = logging.getLogger(__name__)
 
@@ -271,3 +274,266 @@ class TagAgent:
 
 # 全局单例
 tag_agent = TagAgent()
+
+
+# ============================================================
+# 完整版（Function Calling）— 标签推荐 System Prompt
+# ============================================================
+
+TAG_AGENT_SYSTEM_PROMPT = """你是笔记标签推荐助手。根据笔记内容与已有标签体系，推荐最合适的 3-5 个标签。
+
+工作流程:
+1. 先调用 suggest_tags 工具获取候选标签分析（关键词 + 已有标签语义匹配结果）
+2. 综合候选与你对内容的理解，确定最终推荐标签
+3. 需要建新标签时调用 create_tag；发现已有标签语义重复时调用 merge_tags
+
+规则:
+- 优先复用已有标签（type="existing"），避免创建语义重复的新标签
+- 标签应简洁具体（2-8 个中文字符或 2-3 个英文单词），覆盖笔记核心主题
+- 推荐 3-5 个，按重要性排序
+- 如果已有标签明确多余或重复，最多给出 1 条合并建议
+
+最终输出必须且只能是一个 JSON 数组（不要输出解释文字、不要用 markdown 代码块）:
+[{"name": "标签名", "type": "existing" 或 "new", "reason": "一句话推荐理由"}]"""
+
+
+def _parse_llm_json(content: str) -> list | None:
+    """从 LLM 输出中解析 JSON 数组（容忍 ```json 包裹 / 前后解释文字）"""
+    if not content:
+        return None
+    text = content.strip()
+    # 去掉 markdown 代码块包裹
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    # 直接解析
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, list) else None
+    except json.JSONDecodeError:
+        pass
+    # 回退: 提取第一个 JSON 数组
+    match = re.search(r"\[.*\]", text, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group())
+            return data if isinstance(data, list) else None
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _normalize_suggestion(item: object) -> dict | None:
+    """规范化 LLM 输出的单条推荐，字段与简易版保持一致"""
+    if not isinstance(item, dict):
+        return None
+    name = str(item.get("name", "")).strip()
+    if not name or len(name) > 30:
+        return None
+    typ = "existing" if str(item.get("type", "")).strip() == "existing" else "new"
+    return {
+        "tag": name,
+        "type": typ,
+        "tag_id": None,          # 由 suggest_tags_llm 补查
+        "keyword": "",
+        "score": 0.8 if typ == "existing" else 0.5,
+        "reason": str(item.get("reason", "")).strip(),
+    }
+
+
+# ============================================================
+# TagAgent 完整版方法（挂到类上）
+# ============================================================
+
+async def suggest_tags_llm(self: TagAgent, db: Session, note: Note) -> dict:
+    """
+    完整版标签推荐 — Function Calling + LLM 决策
+
+    相比简易版（jieba+Embedding 直接输出）:
+      - jieba+Embedding 只提供候选分析（suggest_tags 工具）
+      - LLM 综合候选与内容理解输出最终推荐，推荐理由更合理
+      - 可调用 create_tag 创建新标签、merge_tags 收集合并建议
+
+    Returns:
+        {
+          "note_id": ...,
+          "mode": "llm",
+          "suggestions": [{tag, type, tag_id, keyword, score, reason}, ...],
+          "merge_suggestions": [{from, to, reason}, ...],
+          "steps": [{tool, observation}, ...],
+          "error": 降级说明（如有）
+        }
+    """
+    text = f"{note.title or ''}\n{note.content or ''}".strip()
+    if not text:
+        logger.info(f"笔记 {note.id} 内容为空，跳过 LLM 标签推荐")
+        return {"note_id": note.id, "mode": "llm", "suggestions": [], "merge_suggestions": [], "steps": []}
+
+    # ---- 定义工具（闭包绑定 db，每个请求独立） ----
+    async def suggest_tags_tool(content: str, existing_tags: list[str] | None = None) -> list:
+        """基于笔记内容提取候选标签：jieba 关键词 + 与已有标签的语义匹配"""
+        if not content:
+            return []
+        keywords = self._extract_keywords(content)
+        tag_objs: list[Tag] = []
+        for name in existing_tags or []:
+            tag = db.query(Tag).filter_by(name=str(name).strip().lower()).first()
+            if tag and tag not in tag_objs:
+                tag_objs.append(tag)
+        return await self._match_keywords(keywords, tag_objs)
+
+    async def create_tag_tool(name: str) -> dict:
+        """创建新标签（已存在则返回已存在）"""
+        clean = str(name).strip().lower()
+        if not clean or len(clean) > 30:
+            return {"ok": False, "reason": "标签名不合法"}
+        existing = db.query(Tag).filter_by(name=clean).first()
+        if existing:
+            return {"ok": True, "tag_id": existing.id, "existed": True}
+        tag = Tag(name=clean)
+        db.add(tag)
+        db.commit()
+        logger.info(f"完整版创建标签: {clean} (id={tag.id})")
+        return {"ok": True, "tag_id": tag.id, "existed": False}
+
+    async def merge_tags_tool(from_name: str, to_name: str) -> dict:
+        """检查两个标签是否语义重复，返回合并建议（不自动执行，由用户确认）"""
+        clean_from = str(from_name).strip().lower()
+        clean_to = str(to_name).strip().lower()
+        if clean_from == clean_to:
+            return {"action": "none", "reason": "两个标签相同，无需合并"}
+        f = db.query(Tag).filter_by(name=clean_from).first()
+        t = db.query(Tag).filter_by(name=clean_to).first()
+        if not f or not t:
+            return {"action": "none", "reason": "标签不存在，无法合并"}
+        return {
+            "action": "merge",
+            "from": clean_from,
+            "to": clean_to,
+            "reason": f"「{clean_from}」与「{clean_to}」语义重复",
+        }
+
+    # ---- 组装 Agent ----
+    registry_tools = [
+        ToolDefinition(
+            name="suggest_tags",
+            description="基于笔记内容提取候选标签：jieba 关键词 + 与已有标签的 Embedding 语义匹配。返回候选标签列表，每个含 tag(标签名), type(existing/new), score(相关度), keyword(来源关键词)。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "笔记正文内容"},
+                    "existing_tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "已有标签名列表，用于语义匹配（可选）",
+                    },
+                },
+                "required": ["content"],
+            },
+            func=suggest_tags_tool,
+        ),
+        ToolDefinition(
+            name="create_tag",
+            description="创建一个新标签。当笔记包含现有标签体系未覆盖的核心主题时调用。标签名会转为小写。",
+            parameters={
+                "type": "object",
+                "properties": {"name": {"type": "string", "description": "新标签名"}},
+                "required": ["name"],
+            },
+            func=create_tag_tool,
+        ),
+        ToolDefinition(
+            name="merge_tags",
+            description="检查两个已有标签是否语义重复。返回合并建议（from 合并到 to），不会自动执行，最终由用户确认。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "from_name": {"type": "string", "description": "被合并的标签名"},
+                    "to_name": {"type": "string", "description": "保留的标签名"},
+                },
+                "required": ["from_name", "to_name"],
+            },
+            func=merge_tags_tool,
+        ),
+    ]
+
+    agent = build_agent(
+        name="tag_agent",
+        description="标签推荐",
+        system_prompt=TAG_AGENT_SYSTEM_PROMPT,
+        tools=registry_tools,
+        max_steps=4,
+    )
+
+    existing_names = [t.name for t in note.tags]
+    user_input = (
+        f"笔记标题: {note.title}\n"
+        f"笔记正文:\n{note.content[:4000]}\n"
+        f"已有标签: {json.dumps(existing_names, ensure_ascii=False)}"
+    )
+
+    output = await agent.run(user_input)
+
+    # ---- 解析结果 ----
+    merge_suggestions: list[dict] = []
+    for step in output.steps:
+        if step.tool == "merge_tags" and step.observation:
+            try:
+                obs = json.loads(step.observation)
+                if isinstance(obs, dict) and obs.get("action") == "merge":
+                    merge_suggestions.append({
+                        "from": obs["from"],
+                        "to": obs["to"],
+                        "reason": obs.get("reason", ""),
+                    })
+            except json.JSONDecodeError:
+                continue
+
+    suggestions: list[dict] = []
+    raw = _parse_llm_json(output.content)
+    if raw:
+        for item in raw:
+            sug = _normalize_suggestion(item)
+            if not sug:
+                continue
+            # existing → 补 tag_id；new → 查库避免与已有标签重复
+            if sug["type"] == "existing":
+                tag = db.query(Tag).filter_by(name=sug["tag"].lower()).first()
+                sug["tag_id"] = tag.id if tag else None
+            else:
+                tag = db.query(Tag).filter_by(name=sug["tag"].lower()).first()
+                if tag:
+                    sug["type"] = "existing"
+                    sug["tag_id"] = tag.id
+                sug["score"] = round(sug["score"] + len(sug["reason"]) / 100, 3)
+            suggestions.append(sug)
+            if len(suggestions) >= 5:
+                break
+        # 已有标签优先展示，按 type 排序
+        suggestions.sort(key=lambda s: (0 if s["type"] == "existing" else 1, -s["score"]))
+    else:
+        logger.warning(f"笔记 {note.id} LLM 输出无法解析，降级到简易版")
+        suggestions = await self.suggest_tags(db, note)
+        return {
+            "note_id": note.id,
+            "mode": "llm",
+            "suggestions": suggestions,
+            "merge_suggestions": merge_suggestions,
+            "steps": [{"tool": s.tool, "observation": s.observation} for s in output.steps],
+            "error": "LLM 输出解析失败，已降级为简易版推荐",
+        }
+
+    logger.info(
+        f"笔记 {note.id} 完整版推荐 {len(suggestions)} 标签, "
+        f"{len(merge_suggestions)} 条合并建议"
+    )
+    return {
+        "note_id": note.id,
+        "mode": "llm",
+        "suggestions": suggestions,
+        "merge_suggestions": merge_suggestions,
+        "steps": [{"tool": s.tool, "observation": s.observation} for s in output.steps],
+    }
+
+
+# 挂载到 TagAgent 类
+TagAgent.suggest_tags_llm = suggest_tags_llm

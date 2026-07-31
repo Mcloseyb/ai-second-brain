@@ -253,9 +253,19 @@ export interface TagSuggestion {
   tag_id: number | null
   keyword: string
   score: number
+  reason?: string
+}
+
+export interface MergeSuggestion {
+  from: string
+  to: string
+  reason?: string
 }
 
 export interface AutoTagResponse {
   note_id: number
+  mode?: 'simple' | 'llm'
   suggestions: TagSuggestion[]
+  merge_suggestions?: MergeSuggestion[]
+  steps?: Array<{ tool: string; observation: string | null }>
 }

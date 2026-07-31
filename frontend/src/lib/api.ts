@@ -78,9 +78,9 @@ export const notesApi = {
   move: (noteId: number, folder: string) =>
     client.put(`/api/notebooks/notes/${noteId}/move`, null, { params: { folder } }) as Promise<{ note: NoteResponse['note'] }>,
 
-  /** AI 自动标签推荐（P4 简易版） */
-  autoTag: (noteId: number) =>
-    client.post(`/api/notes/${noteId}/auto-tag`) as Promise<AutoTagResponse>,
+  /** AI 自动标签推荐（P4）: mode=simple 简易版(零token) / mode=llm 完整版(Function Calling) */
+  autoTag: (noteId: number, mode: 'simple' | 'llm' = 'simple') =>
+    client.post(`/api/notes/${noteId}/auto-tag`, null, { params: { mode } }) as Promise<AutoTagResponse>,
 }
 
 // ============================================================
@@ -122,6 +122,10 @@ export const tagsApi = {
 
   remove: (id: number) =>
     client.delete(`/api/tags/${id}`) as Promise<{ ok: boolean }>,
+
+  /** 合并标签（from → to）: from 的笔记转移到 to */
+  merge: (fromName: string, toName: string) =>
+    client.post('/api/tags/merge', { from_name: fromName, to_name: toName }) as Promise<{ ok: boolean; merged: number; from: string; to: string }>,
 }
 
 // ============================================================
