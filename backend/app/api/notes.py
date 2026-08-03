@@ -92,6 +92,76 @@ async def list_notes(
     }
 
 
+# ============================================================
+# 回收站（Trash）— 必须在 /{note_id} 之前注册，避免路由冲突
+# ============================================================
+
+@router.get("/trash")
+async def list_trash(
+    notebook_id: int | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """回收站列表"""
+    notes, total = await note_service.trash_list(db, notebook_id, page, page_size)
+    return {
+        "notes": [n.to_dict(include_content=False) for n in notes],
+        "total": total, "page": page, "page_size": page_size,
+    }
+
+
+@router.post("/{note_id}/restore")
+async def restore_note(note_id: int, db: Session = Depends(get_db)):
+    """从回收站恢复笔记"""
+    note = await note_service.restore(db, note_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found in trash")
+    return {"note": note.to_dict()}
+
+
+@router.delete("/{note_id}/permanent")
+async def permanent_delete_note(note_id: int, db: Session = Depends(get_db)):
+    """永久删除笔记（不可恢复）"""
+    ok = await note_service.permanent_delete(db, note_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Note not found in trash")
+    return {"ok": True}
+
+
+@router.post("/trash/empty")
+async def empty_trash(
+    notebook_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """清空回收站"""
+    count = await note_service.empty_trash(db, notebook_id)
+    return {"ok": True, "deleted": count}
+
+
+class FolderDeleteRequest(BaseModel):
+    notebook_id: int
+    folder: str
+
+
+@router.post("/folder-delete")
+async def delete_folder(req: FolderDeleteRequest, db: Session = Depends(get_db)):
+    """删除文件夹及其内所有笔记（软删除）"""
+    count = await note_service.delete_folder(db, req.notebook_id, req.folder)
+    return {"ok": True, "deleted": count}
+
+
+@router.get("/folder-count")
+async def folder_note_count(
+    notebook_id: int = Query(...),
+    folder: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """统计文件夹内笔记数量"""
+    count = note_service.count_folder_notes(db, notebook_id, folder)
+    return {"count": count}
+
+
 @router.get("/{note_id}")
 async def get_note(note_id: int, db: Session = Depends(get_db)):
     """获取笔记详情"""
@@ -117,7 +187,7 @@ async def update_note(note_id: int, data: NoteUpdate, db: Session = Depends(get_
 
 @router.delete("/{note_id}")
 async def delete_note(note_id: int, db: Session = Depends(get_db)):
-    """删除笔记"""
+    """删除笔记（软删除，移入回收站）"""
     ok = await note_service.delete(db, note_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Note not found")
@@ -183,7 +253,7 @@ async def auto_tag_note(
     db: Session = Depends(get_db),
 ):
     """
-    AI 自动标签推荐 — 根据笔记内容推荐 3-5 个标签
+    AI 自动标签推荐 — 根据笔记内容推荐标签（最多 3 个）
 
     mode 参数:
       - simple: 简易版（默认）— jieba TF-IDF + Embedding，零 LLM token

@@ -41,7 +41,7 @@ from app.agents.base import ToolDefinition, build_agent
 logger = logging.getLogger(__name__)
 
 # ---- 可调参数 ----
-TOP_TAGS = 5            # 最终推荐标签数
+TOP_TAGS = 3            # 最终推荐标签数（P4 修改：限制最多 3 个，用户可自行添加不限）
 TOP_KEYWORDS = 12       # 候选关键词池（略多于推荐数）
 EXISTING_THRESHOLD = 0.75  # 关键词与已有标签的复用阈值
 MAX_TAG_LENGTH = 20     # 建议新建标签的最大长度
@@ -310,7 +310,7 @@ tag_agent = TagAgent()
 # 完整版（Function Calling）— 标签推荐 System Prompt
 # ============================================================
 
-TAG_AGENT_SYSTEM_PROMPT = """你是笔记标签推荐助手。根据笔记内容与已有标签体系，推荐最合适的 3-5 个标签。
+TAG_AGENT_SYSTEM_PROMPT = """你是笔记标签推荐助手。根据笔记内容与已有标签体系，推荐最合适的标签（最多 3 个，用户可自行添加更多）。
 
 工作流程:
 1. 先调用 suggest_tags 工具获取候选标签分析（关键词 + 已有标签语义匹配结果）
@@ -320,7 +320,7 @@ TAG_AGENT_SYSTEM_PROMPT = """你是笔记标签推荐助手。根据笔记内容
 规则:
 - 优先复用已有标签（type="existing"），避免创建语义重复的新标签
 - 标签应简洁具体（2-8 个中文字符或 2-3 个英文单词），覆盖笔记核心主题
-- 推荐 3-5 个，按重要性排序
+- 推荐最多 3 个，按重要性排序
 - 如果已有标签明确多余或重复，最多给出 1 条合并建议
 
 最终输出必须且只能是一个 JSON 数组（不要输出解释文字、不要用 markdown 代码块）:
@@ -536,7 +536,7 @@ async def suggest_tags_llm(self: TagAgent, db: Session, note: Note) -> dict:
                     sug["tag_id"] = tag.id
                 sug["score"] = round(sug["score"] + len(sug["reason"]) / 100, 3)
             suggestions.append(sug)
-            if len(suggestions) >= 5:
+            if len(suggestions) >= 3:
                 break
         # 已有标签优先展示，按 type 排序
         suggestions.sort(key=lambda s: (0 if s["type"] == "existing" else 1, -s["score"]))

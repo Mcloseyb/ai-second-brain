@@ -5,6 +5,7 @@
  */
 import { useEffect, useState, useCallback } from 'react'
 import { useNotesStore } from '@/stores/notes'
+import { notesApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -13,12 +14,17 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Plus, Search, FileText, Folder, FolderOpen,
   ChevronRight, ChevronDown, Library, Upload,
+  Trash2, Pencil, AlertTriangle,
 } from 'lucide-react'
 import UploadNoteDialog from '@/components/notes/UploadNoteDialog'
 import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import ContextMenu from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -41,7 +47,7 @@ function NoteRow({ note, selectedId, onSelect, onDelete }: {
 
   return (
     <ContextMenu items={[
-      { label: '删除', onClick: () => onDelete(note), danger: true },
+      { label: '删除', icon: <Trash2 className="size-3.5" />, onClick: () => onDelete(note), danger: true },
     ]}>
       <button
         className={cn(
@@ -84,6 +90,11 @@ export default function NoteList() {
   // ---- 上传笔记对话框（加号菜单 + 文件夹右键） ----
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadFolder, setUploadFolder] = useState('')
+
+  // ---- 删除确认弹窗 ----
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean; type: 'note' | 'folder'; target: NoteListItem | FolderNode | null; count: number
+  }>({ open: false, type: 'note', target: null, count: 0 })
 
   const openUpload = (folder = '') => {
     setUploadFolder(folder)
@@ -145,22 +156,40 @@ export default function NoteList() {
     toast.success('文件夹已创建')
   }
 
-  const handleDeleteNote = async (note: NoteListItem) => {
-    try { await deleteNote(note.id); toast.success('已删除'); await fetchFolderTree() }
+  const handleDeleteNote = (note: NoteListItem) => {
+    setDeleteConfirm({ open: true, type: 'note', target: note, count: 0 })
+  }
+
+  const confirmDeleteNote = async () => {
+    const note = deleteConfirm.target as NoteListItem | null
+    if (!note) return
+    try { await deleteNote(note.id); toast.success('已移入回收站'); await fetchFolderTree() }
     catch (e) { toast.error('删除失败: ' + (e as Error).message) }
+    setDeleteConfirm({ open: false, type: 'note', target: null, count: 0 })
   }
 
   const handleDeleteFolder = async (folder: FolderNode) => {
-    if (!confirm(`确定删除文件夹「${folder.name}」及其所有笔记？`)) return
-    // 删除该文件夹内所有笔记（含子文件夹）
-    const collectNotes = (f: FolderNode): NoteListItem[] => [
-      ...f.notes, ...f.children.flatMap(collectNotes),
-    ]
-    for (const n of collectNotes(folder)) {
-      try { await deleteNote(n.id) } catch { /* skip */ }
+    if (!activeNotebookId) return
+    // 先统计笔记数
+    try {
+      const res: any = await notesApi.folderNoteCount(activeNotebookId, folder.path)
+      const count = res.data?.count ?? res.count ?? 0
+      setDeleteConfirm({ open: true, type: 'folder', target: folder, count })
+    } catch {
+      setDeleteConfirm({ open: true, type: 'folder', target: folder, count: 0 })
     }
-    await fetchFolderTree()
-    toast.success('文件夹已删除')
+  }
+
+  const confirmDeleteFolder = async () => {
+    const folder = deleteConfirm.target as FolderNode | null
+    if (!folder || !activeNotebookId) return
+    try {
+      const res: any = await notesApi.deleteFolder(activeNotebookId, folder.path)
+      const deleted = res.data?.deleted ?? res.deleted ?? 0
+      toast.success(`文件夹「${folder.name}」已删除，${deleted} 篇笔记移入回收站`)
+      await fetchFolderTree()
+    } catch (e) { toast.error('删除失败: ' + (e as Error).message) }
+    setDeleteConfirm({ open: false, type: 'folder', target: null, count: 0 })
   }
 
   const handleRenameFolder = async (oldPath: string) => {
@@ -204,11 +233,13 @@ export default function NoteList() {
       <div key={folder.path}>
         {/* 文件夹行 */}
         <ContextMenu items={[
-          { label: '在此新建笔记', onClick: () => handleNewNote(folder.path) },
-          { label: '新建子文件夹', onClick: () => handleCreateFolder(folder.path) },
-          { label: '在此上传笔记', onClick: () => openUpload(folder.path) },
-          { label: '重命名', onClick: () => handleRenameFolder(folder.path) },
-          { label: '删除文件夹', onClick: () => handleDeleteFolder(folder), danger: true },
+          { label: '在此新建笔记', icon: <FileText className="size-3.5" />, onClick: () => handleNewNote(folder.path) },
+          { label: '新建子文件夹', icon: <Folder className="size-3.5" />, onClick: () => handleCreateFolder(folder.path) },
+          { label: '在此上传笔记', icon: <Upload className="size-3.5" />, onClick: () => openUpload(folder.path) },
+          { type: 'separator', label: '' },
+          { label: '重命名', icon: <Pencil className="size-3.5" />, onClick: () => handleRenameFolder(folder.path) },
+          { type: 'separator', label: '' },
+          { label: '删除文件夹', icon: <Trash2 className="size-3.5" />, onClick: () => handleDeleteFolder(folder), danger: true },
         ]}>
           <button
             className="flex w-full items-center gap-1.5 rounded-sm py-1 pr-2 text-left text-sm hover:bg-accent transition-colors"
@@ -355,6 +386,49 @@ export default function NoteList() {
         folder={uploadFolder}
         notebookId={activeNotebookId}
       />
+
+      {/* 删除确认弹窗 */}
+      <Dialog open={deleteConfirm.open} onOpenChange={(v) => setDeleteConfirm((p) => ({ ...p, open: v }))}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <AlertTriangle className="size-4 text-destructive" />
+              {deleteConfirm.type === 'folder' ? '删除文件夹' : '删除笔记'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {deleteConfirm.type === 'folder' ? (
+                <>
+                  确定删除文件夹
+                  <strong>「{(deleteConfirm.target as FolderNode)?.name}」</strong>
+                  {deleteConfirm.count > 0 && (
+                    <> 及其内部 <strong className="text-destructive">{deleteConfirm.count}</strong> 篇笔记</>
+                  )}
+                  ？
+                  <br />
+                  <span className="text-muted-foreground">笔记将移入回收站，30 天后自动清理。</span>
+                </>
+              ) : (
+                <>
+                  确定删除笔记
+                  <strong>「{(deleteConfirm.target as NoteListItem)?.title}」</strong>？
+                  <br />
+                  <span className="text-muted-foreground">将移入回收站，可随时恢复。</span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteConfirm((p) => ({ ...p, open: false }))}>
+              取消
+            </Button>
+            <Button variant="destructive" size="sm"
+              onClick={deleteConfirm.type === 'folder' ? confirmDeleteFolder : confirmDeleteNote}>
+              <Trash2 className="size-3.5 mr-1" />
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

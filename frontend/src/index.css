@@ -1,3 +1,6 @@
+/* ---- highlight.js 代码高亮主题 (GitHub) ---- */
+@import 'highlight.js/styles/github.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -150,4 +153,129 @@ html.dark .vditor--dark .vditor-link-hl {
   width: 100%;
   height: 100%;
   min-height: 400px;
+}
+
+/* ============================================================
+   聊天 Markdown 渲染样式（AI 气泡内）
+   ============================================================ */
+.chat-markdown p {
+  margin: 0.25em 0;
+}
+.chat-markdown p:first-child {
+  margin-top: 0;
+}
+.chat-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown h1 { font-size: 1.25em; font-weight: 700; margin: 0.6em 0 0.2em; }
+.chat-markdown h2 { font-size: 1.15em; font-weight: 700; margin: 0.5em 0 0.15em; }
+.chat-markdown h3 { font-size: 1.05em; font-weight: 600; margin: 0.4em 0 0.1em; }
+.chat-markdown h4,.chat-markdown h5,.chat-markdown h6 { font-size: 1em; font-weight: 600; margin: 0.3em 0 0.1em; }
+
+.chat-markdown ul, .chat-markdown ol {
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+.chat-markdown li {
+  margin: 0.1em 0;
+}
+.chat-markdown li > p {
+  margin: 0;
+}
+
+/* 表格 */
+.chat-markdown table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+  font-size: 0.9em;
+}
+.chat-markdown th, .chat-markdown td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.35em 0.6em;
+  text-align: left;
+}
+.chat-markdown th {
+  background: hsl(var(--muted) / 0.6);
+  font-weight: 600;
+}
+.chat-markdown tr:nth-child(even) td {
+  background: hsl(var(--muted) / 0.3);
+}
+
+/* 引用块 */
+.chat-markdown blockquote {
+  border-left: 3px solid hsl(var(--primary) / 0.4);
+  padding-left: 0.75em;
+  margin: 0.25em 0;
+  color: hsl(var(--muted-foreground));
+}
+.chat-markdown blockquote p {
+  margin: 0.15em 0;
+}
+
+/* 行内代码 */
+.chat-markdown code:not(pre code) {
+  background: hsl(var(--muted-foreground) / 0.15);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+/* 代码块 */
+.chat-markdown pre {
+  margin: 0.4em 0;
+  border-radius: 6px;
+  overflow-x: auto;
+  background: hsl(var(--muted-foreground) / 0.08);
+  padding: 0.6em 0.8em;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.chat-markdown pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  font-size: inherit;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+/* 链接 */
+.chat-markdown a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+.chat-markdown a:hover {
+  opacity: 0.8;
+}
+
+/* 分割线 */
+.chat-markdown hr {
+  margin: 0.5em 0;
+  border: none;
+  border-top: 1px solid hsl(var(--border));
+}
+
+/* 图片 */
+.chat-markdown img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+/* 强调 */
+.chat-markdown strong {
+  font-weight: 600;
+}
+
+/* 深色模式下微调代码块背景 */
+.dark .chat-markdown pre {
+  background: hsl(var(--muted-foreground) / 0.12);
+}
+.dark .chat-markdown pre code.hljs {
+  background: transparent !important;
+  color: #c9d1d9;
+}
+.dark .chat-markdown code:not(pre code) {
+  background: hsl(var(--muted-foreground) / 0.25);
 }

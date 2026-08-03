@@ -13,11 +13,23 @@ interface NotesState {
   searchQuery: string
   selectedId: number | null
 
+  // 浏览器式标签页（跨页面持久化）
+  openTabs: Array<{ id: number; title: string }>
+  dirtyTabIds: number[]  // 哪些标签页有未保存修改
+
   // 笔记库
   notebooks: Notebook[]
   activeNotebookId: number | null
   folderTree: FolderNode[]
   rootNotes: NoteListItem[]
+
+  // Actions — 标签页
+  openTab: (id: number, title: string) => void
+  closeTab: (id: number) => void
+  closeOtherTabs: (keepId: number) => void
+  closeAllTabs: () => void
+  updateTabTitle: (id: number, title: string) => void
+  setTabDirty: (id: number, dirty: boolean) => void
 
   // Actions — 笔记
   setSearchQuery: (q: string) => void
@@ -53,10 +65,44 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   loading: false,
   searchQuery: '',
   selectedId: null,
+  openTabs: [],
+  dirtyTabIds: [],
   notebooks: [],
   activeNotebookId: null,
   folderTree: [],
   rootNotes: [],
+
+  // ---- 标签页管理 ----
+  openTab: (id, title) =>
+    set((s) => {
+      if (s.openTabs.some((t) => t.id === id)) return s
+      return { openTabs: [...s.openTabs, { id, title }] }
+    }),
+  closeTab: (id) =>
+    set((s) => {
+      const next = s.openTabs.filter((t) => t.id !== id)
+      return {
+        openTabs: next,
+        selectedId: s.selectedId === id ? (next.length > 0 ? next[Math.min(s.openTabs.findIndex((t) => t.id === id), next.length - 1)].id : null) : s.selectedId,
+        dirtyTabIds: s.dirtyTabIds.filter((did) => did !== id),
+      }
+    }),
+  closeOtherTabs: (keepId) =>
+    set((s) => ({
+      openTabs: s.openTabs.filter((t) => t.id === keepId),
+      selectedId: keepId,
+    })),
+  closeAllTabs: () => set({ openTabs: [], dirtyTabIds: [], selectedId: null }),
+  updateTabTitle: (id, title) =>
+    set((s) => ({
+      openTabs: s.openTabs.map((t) => (t.id === id ? { ...t, title } : t)),
+    })),
+  setTabDirty: (id, dirty) =>
+    set((s) => ({
+      dirtyTabIds: dirty
+        ? [...new Set([...s.dirtyTabIds, id])]
+        : s.dirtyTabIds.filter((did) => did !== id),
+    })),
 
   setSearchQuery: (q) => set({ searchQuery: q }),
   setSelectedId: (id) => set({ selectedId: id }),

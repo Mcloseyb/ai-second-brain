@@ -95,6 +95,50 @@ export type SSEEvent =
   | { type: 'done'; message_id: number; tokens: number }
   | { type: 'error'; content: string }
 
+// ---- Mastery types (S1 知识进阶) ----
+
+export interface ConceptMastery {
+  id: number
+  concept_name: string
+  notebook_id: number
+  mastery_score: number
+  assessment_count: number
+  last_assessed_at: string | null
+  strengths: string[]
+  weaknesses: string[]
+  created_at: string
+  updated_at: string
+  sessions?: MasterySessionItem[]
+  score_history?: Array<{ date: string | null; score: number | null }>
+}
+
+export interface MasterySessionItem {
+  id: number
+  concept_name: string
+  notebook_id: number
+  message_count: number
+  final_score: number | null
+  summary: string | null
+  created_at: string | null
+}
+
+export type MasterySSEEvent =
+  | { type: 'status'; content: string }
+  | { type: 'token'; content: string }
+  | { type: 'score'; session_id: number; score: number; strengths: string[]; weaknesses: string[]; summary: string }
+  | { type: 'done'; session_id: number }
+  | { type: 'error'; content: string }
+
+export interface ConceptsListResponse {
+  concepts: ConceptMastery[]
+  total: number
+}
+
+export interface SessionsListResponse {
+  sessions: MasterySessionItem[]
+  total: number
+}
+
 // ---- Sync types ----
 
 export interface SyncStatus {

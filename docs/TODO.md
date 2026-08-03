@@ -12,29 +12,29 @@
 |------|------|------|--------|---------|
 | P1 | 基础通信 | ✅ | 12/12 | SSE流式对话 |
 | P2 | 笔记系统 | ✅ | 10/10 | CRUD + 编辑器 |
-| **P3** | **文档导入+RAG检索** | **✅** | **17/17** | 语义搜索 + BM25 混合检索 |
+| P3 | 文档导入+RAG检索 | ✅ | 17/17 | 语义搜索 + BM25 混合检索 |
 | P4 | AI 自动标签 | ✅ | 8/8 | 简易版 + 完整版(Function Calling) |
 | P5 | 智能双向链接 | ✅ | 8/8 | 语义相关 + 反向链接 + 正文标题高亮 |
-| P6 | AI 出题自测 | ✅ | 7/7 | 知识库/文件夹出题 + AI 批改 |
-| P7 | 真实知识图谱 | ✅ | 6/6 | 语义互联图谱（用户约束） |
-| P8 | 知识回顾总结 | ⏳ | 0/5 | 周报 + 学习路径 |
-| P9 | 打磨打包 | ⏳ | 0/8 | .exe + GitHub Release |
+| P6 | AI 出题自测 | ✅ | 7/7 | 出题 + 批改（→ S2 温故知新复用） |
+| P7 | 知识图谱 | ✅ | 6/6 | 云朵语义聚类（→ S3 知识结构复用） |
+| **S1** | **知识进阶** | **⏳** | **0/10** | **Agent 对话评估掌握度 ← 当前** |
+| S2 | 温故知新 | ⏳ | 0/8 | 间隔复习 + 自由出题（复用 P6） |
+| S3 | 知识结构 | ⏳ | 0/8 | 概念提取 + 依赖图 + 笔记图谱（复用 P7） |
+| S4 | 打磨打包 | ⏳ | 0/6 | .exe + GitHub Release |
 
-**前端重构** — 2026-07-31 完成: Vue 3 → React 18 + TypeScript + Tailwind + shadcn/ui
-- 四大页面全部迁移: 智能笔记 / 知识问答 / 深度研究 / 数据看板
-- Vditor Markdown 编辑器 / ECharts 知识图谱 / SSE 流式对话
-- Zustand 状态管理 / QWebChannel Qt 桥接 / 浅色深色主题切换
-- 打包输出 `frontend/dist/`，desktop 已适配新路径
-
-**暂存池（做完 P9 后再考虑）**: 知识缺口发现 / 学习路径时间线 / 概念成熟度追踪 / AI 学习伙伴
+**页面精简**: 6 页面 → 6 页面（删数据看板，加 S1/S2/S3，合并 P6/P7）
+```
+📝 智能笔记  💬 知识问答  🔄 温故知新  🎯 知识进阶  🗺️ 知识结构  🗑️ 回收站
+```
 
 ---
 
-## P1 — 基础通信 ✅
+## P1-P5 — 已完成 ✅
 
 <details>
-<summary>12/12 已完成</summary>
+<summary>P1-P5 全部完成 (55/55)</summary>
 
+### P1 — 基础通信 ✅
 - [x] 创建目录结构 / requirements / .gitignore
 - [x] FastAPI 入口 + CORS
 - [x] LLM 调用封装 (DeepSeek SSE + 重试)
@@ -44,20 +44,12 @@
 - [x] PySide6 桌面窗口 + qasync
 - [x] httpx API 客户端 + SSE 解析
 - [x] 聊天页面（深色气泡流式显示）
-- [x] curl 测试通过
 - [x] Notion 风格侧边栏
 - [x] GitHub 推送
-</details>
 
----
-
-## P2 — 笔记系统 ✅
-
-<details>
-<summary>10/10 已完成</summary>
-
+### P2 — 笔记系统 ✅
 - [x] Note + Tag 模型（多对多）
-- [x] SQLAlchemy 引擎 (已在 P1 做)
+- [x] SQLAlchemy 引擎
 - [x] 建表（init_db 导入全部模型）
 - [x] POST/GET/PUT/DELETE /api/notes
 - [x] 分页 + 搜索 + 标签筛选
@@ -66,165 +58,151 @@
 - [x] 笔记页面（左右分栏）
 - [x] 笔记列表树 + Markdown 编辑器
 - [x] Ctrl+S 保存 + 新建笔记
+
+### P3 — 文档导入 + RAG ✅
+- [x] 文档解析 (md/docx/pdf/txt → Markdown)
+- [x] 上传导入 / 路径导入 / 解析预览 API
+- [x] Embedding 服务 (SiliconFlow BAAI/bge-large-zh-v1.5)
+- [x] ChromaDB 向量存储 + 自动同步
+- [x] MD5 哈希变更检测 + 定时后台同步
+- [x] 语义搜索 API (POST /api/notes/search)
+- [x] 混合检索 (语义 0.7 + BM25 0.3 + jieba 分词)
+- [x] 知识问答页接入搜索（搜索知识库开关）
+- [x] 搜索结果展示 + 笔记跳转
+
+### P4 — AI 自动标签 ✅
+- [x] TagAgent (jieba TF-IDF + Embedding 匹配)
+- [x] 简易版 (零 token) + 完整版 (Function Calling + LLM)
+- [x] ReAct Agent 基类 + ToolRegistry 工具注册机制
+- [x] auto-tag API (mode=simple/llm) + suggest-tags API
+- [x] TagSuggestBar 前端推荐条（采纳/忽略/合并）
+- [x] 标签合并去重 (POST /api/tags/merge)
+- [x] 限制 3 个标签 + 仅首次保存推荐
+
+### P5 — 智能双向链接 ✅
+- [x] 语义相关笔记 API (GET /api/notes/{id}/related)
+- [x] 标题检测 API (正文包含其他笔记标题)
+- [x] note_links 表 + 显式链接记录
+- [x] 反向链接查询 (linked-from)
+- [x] RelatedNotesPanel 右侧面板（可折叠）
+- [x] 正文标题自动高亮（Vditor DOM 包裹）
+
+### P6 — AI 出题自测 ✅（→ S2 复用）
+- [x] POST /api/quiz/generate — 知识库/文件夹出题
+- [x] POST /api/quiz/grade — AI 批改 + 解析
+- [x] Quiz 页面（范围选择 + 答题 + 批改结果）
+
+### P7 — 知识图谱 ✅（→ S3 复用）
+- [x] 语义聚类 (KMeans + Embedding) → 云朵视图
+- [x] Agent 给每簇起名 + 簇间连线
+- [x] 聚焦效果（展开放大、其余淡出）
+- [x] 统计数据 API (GET /api/dashboard/stats)
+
 </details>
 
 ---
 
-## P3 — 文档导入 + RAG 笔记检索
+## S1 — 知识进阶 🎯（当前）
 
-> **三大模块: ① 文档导入(md/docx/pdf→笔记) → ② 增量同步(MD5 变更检测) → ③ 语义搜索(自然语言搜笔记)**
+> **Agent 对话式评估掌握度**。用户选一个标签/主题，Agent 通过提问 + 追问判断理解深度，
+> 不是做选择题，而是开放式对话，让用户用自己的话解释概念。
 
-### 3.0 文档导入 + 同步框架 ✅
-- [x] 3.0.1 POST /api/documents/import — 上传文件导入为笔记
-- [x] 3.0.2 POST /api/documents/import-from-path — 本地路径导入
-- [x] 3.0.3 core/document_parser.py — md/docx/pdf/txt → Markdown
-- [x] 3.0.4 SyncService — 全量/增量/单篇同步 + MD5 变更检测
-- [x] 3.0.5 POST /api/sync/now — 手动触发同步
-- [x] 3.0.6 定时自动同步 — lifespan 后台协程 + 开关 API
+### 1.0 数据模型
+- [ ] 1.0.1 `ConceptMastery` 表 — 概念掌握度记录（concept_name, mastery_score 0-100, last_assessed, assessment_count, strengths[], weaknesses[]）
+- [ ] 1.0.2 `MasterySession` 表 — 评估对话记录（concept, messages JSON, final_score, created_at）
+- [ ] 1.0.3 数据库迁移 — Alembic 或 manual ALTER TABLE
 
-### 3.1 后端 — Embedding + 向量存储
-- [x] 3.1.1 实现 core/embedding.py（SiliconFlow BAAI/bge-large-zh-v1.5）
-- [x] 3.1.2 实现 core/rag_engine.py（笔记文本向量化 + ChromaDB 存储）
-- [x] 3.1.3 笔记保存时自动同步到向量库（note_service 中触发）
-- [x] 3.1.4 笔记删除时同步清理向量库
-- [x] 3.1.5 启动时把已有笔记全量索引一遍
+### 1.1 MasteryAgent（核心）
+- [ ] 1.1.1 System Prompt 设计 — 学习教练角色，引导用户用自己的话解释，追问笔记没有的内容
+- [ ] 1.1.2 工具定义: `get_concept_notes` — 读取该标签下的笔记内容（注入 context）
+- [ ] 1.1.3 工具定义: `get_mastery_status` — 查询当前概念掌握度
+- [ ] 1.1.4 工具定义: `update_mastery` — 评估结束后写入掌握度 + 强弱项
+- [ ] 1.1.5 ReAct 循环实现 — ask → user replies → evaluate → follow-up → … → final score
+
+### 1.2 API
+- [ ] 1.2.1 `POST /api/mastery/assess` — SSE 流式评估对话（传入 concept/tag，返回 token 流）
+- [ ] 1.2.2 `GET /api/mastery/concepts` — 所有已评估概念的掌握度列表
+- [ ] 1.2.3 `GET /api/mastery/concepts/{name}` — 单个概念详情（评分历史、强弱项、最近对话）
+- [ ] 1.2.4 `GET /api/mastery/sessions` — 评估历史列表
+
+### 1.3 前端
+- [ ] 1.3.1 MasteryPage 页面 — 概念掌握度卡片网格 + 开始评估入口
+- [ ] 1.3.2 ConceptCard 组件 — 掌握度圆环 + 强弱项标签 + 最近评估时间
+- [ ] 1.3.3 AssessmentChat 组件 — 对话式评估界面（类 Chat 但 Agent 主导提问）
+- [ ] 1.3.4 路由 `/mastery` + 侧边栏入口（🎯 知识进阶）
+
+### 1.4 测试
+- [ ] 1.4.1 后端: test_mastery_agent.py — Agent 评估流程单元测试
+- [ ] 1.4.2 后端: test_mastery_api.py — API 端点集成测试
+- [ ] 1.4.3 前端: 掌握度卡片渲染 / 评估对话流
+
+---
+
+## S2 — 温故知新 🔄（预计 3-4 天）
+
+> **间隔重复 + 自由出题**。系统按遗忘曲线自动安排复习时间，到时间提醒；
+> 也可手动选范围自由出题。底层复用 P6 出题 + 批改引擎。
+
+### 2.1 数据模型
+- [ ] 2.1.1 `ReviewSchedule` 表 — 复习计划（note_id/concept, next_review_at, interval_days, ease_factor, consecutive_correct, consecutive_wrong）
+- [ ] 2.1.2 `ReviewLog` 表 — 复习记录（schedule_id, score, reviewed_at）
+
+### 2.2 ReviewAgent
+- [ ] 2.2.1 SM-2 间隔重复算法实现（ease factor 调整 + 间隔计算）
+- [ ] 2.2.2 复习内容生成 — 复用 P6 出题 + 新增"口述总结"题型
+- [ ] 2.2.3 复习提醒机制 — GET /api/review/due（今日待复习列表）
+
+### 2.3 API
+- [ ] 2.3.1 `GET /api/review/due` — 今日待复习列表（按优先级排序）
+- [ ] 2.3.2 `POST /api/review/start` — 开始一次复习（生成题目 SSE）
+- [ ] 2.3.3 `POST /api/review/complete` — 完成复习记录（更新 SM-2 状态 + 联动掌握度）
+- [ ] 2.3.4 `GET /api/review/calendar` — 复习日历数据（月度热力图）
+- [ ] 2.3.5 `POST /api/review/schedule` — 手动添加到复习计划
+
+### 2.4 前端
+- [ ] 2.4.1 ReviewPage 页面 — 今日待复习 + 复习日历 + 自由出题入口
+- [ ] 2.4.2 ReviewCard 组件 — 待复习项（标题、间隔天数、优先级指示）
+- [ ] 2.4.3 ReviewCalendar 组件 — 月度复习热力图
+- [ ] 2.4.4 复用 QuizPage 的答题界面（自由出题模式）
+- [ ] 2.4.5 路由 `/review` + 侧边栏入口（🔄 温故知新）
+
+---
+
+## S3 — 知识结构 🗺️（预计 3-4 天）
+
+> **概念提取 + 前置依赖 + 学习路径**。从笔记中自动提取细粒度概念，
+> 推断前置依赖关系，可视化知识结构。复用 P7 图谱。
+
+### 3.1 ConceptAgent
+- [ ] 3.1.1 概念提取 — LLM 从标签对应的笔记中提取关键概念（比标签更细）
+- [ ] 3.1.2 前置依赖推断 — LLM 分析概念间"得先懂 A 才能学 B"的关系
+- [ ] 3.1.3 学习路径生成 — 基于掌握度 + 依赖图推荐下一步学习方向
+- [ ] 3.1.4 概念关联到笔记 — 哪些笔记涉及这个概念
 
 ### 3.2 API
-- [x] 3.2.1 POST /api/notes/search — 语义搜索笔记（返回 Top-K + 相似度分数）
-- [x] 3.2.2 搜索时显示摘录片段（返回存储的前 2000 字符文本）
-- [x] 3.2.3 实现混合检索（语义 0.7 + BM25 关键词 0.3）— jieba 分词 + BM25Okapi + 加权融合
+- [ ] 3.2.1 `GET /api/structure/concepts` — 概念列表（含掌握度 + 依赖关系）
+- [ ] 3.2.2 `GET /api/structure/graph` — 概念依赖图数据（nodes + edges + mastery）
+- [ ] 3.2.3 `GET /api/structure/path` — 推荐学习路径（从当前掌握度出发）
+- [ ] 3.2.4 `POST /api/structure/extract` — 触发概念提取（对指定标签）
+- [ ] 3.2.5 `GET /api/structure/stats` — 全局知识统计（原 dashboard stats）
 
 ### 3.3 前端
-- [x] 3.3.1 Chat 页面接入笔记搜索 — 开关「搜索知识库」，自动检索+注入上下文
-- [x] 3.3.2 搜索结果展示（笔记标题 + 匹配片段 + 相似度，点击跳转）
-- [x] 3.3.0 前端 API 客户端 — notesApi.search() 已就绪
+- [ ] 3.3.1 StructurePage 页面 — 概念地图 + 笔记图谱 + 统计概览
+- [ ] 3.3.2 ConceptMap 组件 — ECharts 概念依赖有向图（节点=概念，边=前置依赖）
+- [ ] 3.3.3 NoteGraph 组件 — 复用 P7 云朵聚类图谱（第二个 tab/视图）
+- [ ] 3.3.4 LearningPath 组件 — 推荐学习路径时间线
+- [ ] 3.3.5 StatsOverview 组件 — 全局统计卡片
+- [ ] 3.3.6 路由 `/structure` + 侧边栏入口（🗺️ 知识结构）
 
 ---
 
-## P4 — AI 自动标签（预计 3-4 天）
+## S4 — 打磨 + 打包
 
-> **写完笔记 Ctrl+S → AI 自动分析 → 推荐 3-5 个标签 → 一键采纳**  
-> **Agent 核心流程: 接收分析任务 → 调用 Embedding 工具 → 对比已有标签 → 输出推荐**
-
-### 4.0 简易版 ✅（零 LLM token）
-> 技术方案: jieba TF-IDF 关键词提取 + Embedding 语义匹配已有标签，单次批量 Embedding。
-> 相似度 > 0.75 → 复用已有标签；否则建议新建。多关键词命中同一标签保留最高分，排序输出 Top-5。
-
-- [x] 4.0.1 实现 agents/tag_agent.py — TagAgent（jieba 提取 Top-12 关键词 + Embedding 余弦匹配）
-- [x] 4.0.2 Embedding 失败降级 — 退化为子串匹配，不影响推荐
-- [x] 4.0.3 POST /api/notes/{id}/auto-tag — 返回推荐标签列表（type: existing/new + 分数）
-- [x] 4.0.4 前端 TagSuggestBar — 保存后自动弹出推荐条（单个采纳 / 全部采纳 / 忽略）
-- [x] 4.0.5 采纳标签通过现有 updateNote 批量应用（合并去重）
-
-### 4.1 Function Calling 基础设施 ✅
-- [x] 4.1.1 实现 agents/base.py — ReAct Agent 基类（ToolDefinition/AgentStep/AgentOutput）
-- [x] 4.1.2 实现工具注册机制 ToolRegistry（register/schemas/execute）
-- [x] 4.1.3 定义标签推荐工具 suggest_tags + create_tag + merge_tags（闭包绑定 db）
-- [x] 4.1.4 实现标签推荐 System Prompt（完整版 LLM 决策）
-
-### 4.2 API
-- [x] 4.2.1 POST /api/notes/{id}/auto-tag — mode=simple（简易版）/ mode=llm（完整版）
-- [x] 4.2.2 批量应用标签 — 通过 PUT /api/notes/{id} 的 tags 数组实现（无需独立端点）
-- [x] 4.2.3 POST /api/tags/merge — 合并重复标签（from→to，笔记自动迁移）
-
-### 4.3 前端
-- [x] 4.3.1 保存笔记后自动弹窗"AI 推荐了 3 个标签"
-- [x] 4.3.2 一键采纳 / 手动调整 / 忽略
-- [x] 4.3.3 "AI 打标签"按钮触发完整版 + 推荐理由展示 + merge 建议一键合并
-
----
-
-## P5 — 智能双向链接（预计 3-4 天）
-
-> **打开一篇笔记 → 右侧出现 "Related Notes" → 基于语义相似度自动发现**
-
-### 5.1 后端
-- [x] 5.1.1 笔记相似度计算 — 复用 rag_engine.search 纯语义检索（Embedding 余弦，零 token）
-- [x] 5.1.2 GET /api/notes/{id}/related — 语义 Top-5（排除自身 + 同笔记库过滤）
-- [x] 5.1.3 GET /api/notes/{id}/title-links — 正文检测其他笔记标题（count 命中）
-- [x] 5.1.4 note_links 表（source/target/link_type 唯一约束）+ POST /links 落库 + linked-from 查询
-
-### 5.2 前端
-- [x] 5.2.1 笔记页右侧 "Related Notes" 面板（可折叠 36px/280px）
-- [x] 5.2.2 打开笔记时自动加载关联列表（related + linked-from 并行）
-- [x] 5.2.3 笔记正文自动高亮已链接的笔记标题（Vditor DOM 包裹 + 输入/切换时重应用）
-- [x] 5.2.4 被引用笔记显示 "Linked from: X篇笔记"（可展开列表）
-
----
-
-## P6 — AI 出题自测（预计 3-4 天）
-
-> **选择知识库 / 知识库内文件夹 → "出题" → AI 生成 5 道选择题 + 2 道简答题**  
-> **答完 → AI 批改 → 告诉哪里掌握得好、哪里需要复习**  
-> **出题范围：选择文件夹 = 该文件夹 + 所有子文件夹下的全部笔记（递归）**
-
-### 6.1 后端
-- [x] 6.1.1 POST /api/quiz/generate — 基于笔记内容生成题目（notebook_id + folder 可选）
-- [x] 6.1.2 POST /api/quiz/grade — 批改答案 + 解析（选择 exact match / 简答 LLM）
-- [x] 6.1.3 Prompt 模板设计（Few-shot 生成题目）
-- [x] 6.1.4 题目 + 成绩存储到数据库（Quiz 表：questions_json / grade_json）
-
-### 6.2 前端
-- [x] 6.2.1 出题自测页面（替换原"深度研究"页）— 范围选择 + "生成题目"按钮
-- [x] 6.2.2 答题界面（选择题 + 简答）
-- [x] 6.2.3 批改结果展示（对错 + 解析 + 评分 + 复习建议）
-
-> 说明：原「深度研究」页面为占位空壳（无真实后端），已替换为「出题自测」页面（路由 `/quiz`）。
-
----
-
-## P7 — 真实知识图谱（预计 2-3 天）
-
-> **用真实笔记数据驱动图谱（不再用假数据）**  
-> **连线以语义互联为主导**：两篇笔记 Embedding 余弦相似度 > 阈值即连线（强度=相似度）。
-> 标签共现不用于连线（用户明确约束），仅可选作为节点的分类着色。
-
-### 7.1 后端
-- [x] 7.1.1 GET /api/dashboard/stats — 统计数据（笔记数/标签数/关联数）
-- [x] 7.1.2 GET /api/dashboard/graph — 图谱数据（nodes: 笔记标题, edges: 语义相似度 > 阈值连线）
-- [x] 7.1.3 计算节点权重（笔记字数/引用次数）
-
-### 7.2 前端
-- [x] 7.2.1 graph_page 接入真实 API 数据
-- [x] 7.2.2 点击图谱节点 → 打开对应笔记
-- [x] 7.2.3 图谱筛选（按标签/关联强度）
-
----
-
-## P8 — 知识回顾总结（预计 2-3 天）
-
-> **"本周你学了什么" → AI 分析本周笔记 → 生成小结**  
-> **时间线视图 → 看到自己的学习成长轨迹**
-
-### 8.1 后端
-- [ ] 8.1.1 POST /api/summary/weekly — 本周知识小结
-- [ ] 8.1.2 按标签聚类 → 按时间排序 → AI 生成总结
-- [ ] 8.1.3 GET /api/timeline — 学习时间线数据
-
-### 8.2 前端
-- [ ] 8.2.1 Dashboard 页面替换为真实统计
-- [ ] 8.2.2 本周小结卡片 + 学习时间线
-
----
-
-## P9 — 打磨 + 打包（预计 2-3 天）
-
-- [ ] 9.1 全局 UI 细节打磨（间距/动画/反馈）
-- [ ] 9.2 PyInstaller 打包成 .exe
-- [ ] 9.3 单元测试覆盖核心 API
-- [ ] 9.4 README + 演示 GIF + 简历描述
-- [ ] 9.5 GitHub Release v1.0.0
-
----
-
-## 暂存池
-
-| 功能 | 说明 |
-|------|------|
-| 知识缺口发现 | AI 分析薄弱环节，推荐学习方向 |
-| 学习路径时间线 | 可视化学习成长轨迹 |
-| 概念成熟度追踪 | 每个标签有掌握度分数 |
-| AI 学习伙伴 | 对话式复习提问 + 纠正补充 |
+- [ ] 4.1 全局 UI 细节打磨（间距/动画/反馈）
+- [ ] 4.2 PyInstaller 打包成 .exe
+- [ ] 4.3 单元测试覆盖核心 API
+- [ ] 4.4 README + 演示 GIF + 简历描述
+- [ ] 4.5 GitHub Release v1.0.0
 
 ---
 
@@ -233,18 +211,6 @@
 | 日期 | 更新 |
 |------|------|
 | 2026-07-30 | 初始创建 |
-| 2026-07-30 晚 | 方向调整：从"多Agent写报告"改为"知识互联笔记系统" |
-| 2026-07-31 | P3.1.3~3.2.1 完成：笔记自动向量化闭环 + 语义搜索 API；P3 14/17 |
-| 2026-07-31 | P3.2.3 混合检索完成，P3 全绿 17/17；笔记库/文件夹树/右键菜单完成 |
-| 2026-07-31 | P4 简易版完成（4/8）：jieba TF-IDF + Embedding 标签推荐 Agent + auto-tag API + 前端 TagSuggestBar |
-| 2026-07-31 | P4 完整版完成（8/8）：ReAct Agent 基类 + ToolRegistry + Function Calling 标签推荐 + merge 去重合并 |
-| 2026-07-31 | P5 完成（7/8）：语义相关 + 标题检测 + note_links 落库 + Related Notes 面板 + Linked from |
-| 2026-07-31 | P5 全部完成（8/8）：正文标题自动高亮（Vditor DOM 包裹）；P7 图谱约束=语义互联 |
-| 2026-07-31 | P6 全部完成（7/7）：深度研究页 → AI 出题自测页（知识库/文件夹递归出题 + 答题 + AI 批改） |
-| 2026-07-31 | P7 全部完成（6/6）：真实知识图谱 — 语义互联连线（Embedding 余弦），标签仅着色；看板真实 API + 强度/标签筛选 + 节点跳转 |
-| 2026-07-31 | P7 图谱精简：删除热门标签卡片；连线改 Top-K 邻居（默认 K=3，滑块 1~5 可调）+ 悬停节点临时亮出全量语义关联 |
-| 2026-07-31 | 图谱稳定化：悬停显边改独立叠加系列（layout:'none' 按主图坐标绘制），不再触发力导向重新布局（节点不跳动）；数据看板只保留知识图谱栏目（删除统计卡片） |
-| 2026-07-31 | 图谱重构为「无连线语义聚类」：不画连线；KMeans（纯 numpy）按 Embedding 分簇同簇同色；力导向布局聚簇后固定；关联次数定节点大小；点击高亮关联、再次点击打开笔记（簇数 2~6 可调） |
-| 2026-07-31 | 图谱升级「云朵视图」：每簇笔记一朵云，云朵中央显示 Agent（LLM）按簇内容起的主题名；相关云朵用线互联；坐标全部前端计算（layout:'none'）固定不抖动、禁止拖拽；云朵内笔记默认无名，点云朵才展开；文字颜色与圆圈区分、深色适配；点击笔记高亮关联、再点打开 |
-| 2026-07-31 | 云朵聚焦效果：点击展开云朵 → 该云朵放大 1.6x 并居中，其余云朵缩小变淡（透明 0.05）、只保留相关连线 |
-| 2026-07-31 | 笔记库上传笔记：加号菜单/文件夹右键加「上传笔记」→ 对话框（文件选择 + 标题 md 自动解析/手填 + 标签手动/AI 推荐）导入到目标文件夹；修复导入笔记不进文件夹树（import 补 notebook_id）；新增 /api/documents/parse 与 /api/notes/suggest-tags |
+| 2026-07-31 | P3~P7 大量完成，详见 git log |
+| 2026-08-03 | 前端 UI 打磨：回收站、标签页、Markdown 渲染、侧边栏精简、删除确认 |
+| 2026-08-03 | **重大重规划**：P6 出题自测/P7 知识图谱/P8 知识回顾 → S1 知识进阶/S2 温故知新/S3 知识结构。三板块共享掌握度模型，Agent 驱动学习评估 |

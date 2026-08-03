@@ -104,6 +104,7 @@ async def get_folder_tree(notebook_id: int, db: Session = Depends(get_db)):
     notes = (
         db.query(Note)
         .filter_by(notebook_id=notebook_id)
+        .filter(Note.deleted_at.is_(None))
         .order_by(Note.updated_at.desc())
         .all()
     )
@@ -171,7 +172,7 @@ async def list_notebook_notes(
     folder 为空 → 返回根目录笔记
     folder 为路径 → 递归返回该文件夹及其子文件夹下的所有笔记
     """
-    query = db.query(Note).filter_by(notebook_id=notebook_id)
+    query = db.query(Note).filter_by(notebook_id=notebook_id).filter(Note.deleted_at.is_(None))
 
     if folder:
         # 匹配 folder 字段：以 folder/ 开头的笔记（子文件夹笔记也会被包含）

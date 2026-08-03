@@ -90,6 +90,19 @@ export const notesApi = {
   move: (noteId: number, folder: string) =>
     client.put(`/api/notebooks/notes/${noteId}/move`, null, { params: { folder } }) as Promise<{ note: NoteResponse['note'] }>,
 
+  // ---- 回收站 ----
+  trashList: (notebookId?: number, page = 1, pageSize = 50) =>
+    client.get('/api/notes/trash', { params: { notebook_id: notebookId, page, page_size: pageSize } }),
+  restore: (noteId: number) =>
+    client.post(`/api/notes/${noteId}/restore`),
+  permanentDelete: (noteId: number) =>
+    client.delete(`/api/notes/${noteId}/permanent`),
+  emptyTrash: (notebookId?: number) =>
+    client.post('/api/notes/trash/empty', null, { params: { notebook_id: notebookId } }),
+  deleteFolder: (notebookId: number, folder: string) =>
+    client.post('/api/notes/folder-delete', { notebook_id: notebookId, folder }),
+  folderNoteCount: (notebookId: number, folder: string) =>
+    client.get('/api/notes/folder-count', { params: { notebook_id: notebookId, folder } }),
   /** AI 自动标签推荐（P4）: mode=simple 简易版(零token) / mode=llm 完整版(Function Calling) */
   autoTag: (noteId: number, mode: 'simple' | 'llm' = 'simple') =>
     client.post(`/api/notes/${noteId}/auto-tag`, null, { params: { mode } }) as Promise<AutoTagResponse>,
@@ -264,4 +277,21 @@ export const syncApi = {
 
   /** 查询自动同步状态 */
   autoStatus: () => client.get('/api/sync/auto/status') as Promise<{ auto_sync_enabled: boolean; interval_minutes: number; last_sync_at: string | null }>,
+}
+
+// ============================================================
+// 掌握度评估（S1 知识进阶）
+// ============================================================
+export const masteryApi = {
+  /** 概念掌握度列表 */
+  concepts: (notebookId: number) =>
+    client.get('/api/mastery/concepts', { params: { notebook_id: notebookId } }) as Promise<import('@/types').ConceptsListResponse>,
+
+  /** 单个概念详情 */
+  conceptDetail: (name: string, notebookId: number) =>
+    client.get(`/api/mastery/concepts/${encodeURIComponent(name)}`, { params: { notebook_id: notebookId } }) as Promise<{ concept: import('@/types').ConceptMastery }>,
+
+  /** 评估历史 */
+  sessions: (notebookId: number, concept?: string, limit = 20) =>
+    client.get('/api/mastery/sessions', { params: { notebook_id: notebookId, concept, limit } }) as Promise<import('@/types').SessionsListResponse>,
 }

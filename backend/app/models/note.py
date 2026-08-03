@@ -47,6 +47,7 @@ class Note(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    deleted_at = Column(DateTime, nullable=True)  # 软删除时间戳（NULL=未删除）
 
     # 关联
     tags = relationship("Tag", secondary=note_tags, back_populates="notes", lazy="selectin")

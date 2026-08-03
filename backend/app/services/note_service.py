@@ -102,27 +102,122 @@ class NoteService:
 
     @staticmethod
     async def delete(db: Session, note_id: int) -> bool:
-        """删除笔记（同步清理向量库）"""
-        note = db.query(Note).filter_by(id=note_id).first()
+        """软删除笔记（移入回收站，30天后自动清理）"""
+        note = db.query(Note).filter_by(id=note_id, deleted_at=None).first()
         if not note:
             return False
-        db.delete(note)
+        note.deleted_at = datetime.now(timezone.utc)
         db.commit()
-        logger.info(f"Deleted note: {note_id}")
+        logger.info(f"Soft-deleted note: {note_id}")
 
-        # P3: 同步清理向量库（失败不影响删除结果）
         try:
             await rag_engine.remove_note(note_id)
-            logger.info(f"笔记 {note_id} 已从向量库移除")
         except Exception as e:
             logger.warning(f"清理笔记 {note_id} 向量失败: {e}")
 
         return True
 
     @staticmethod
+    async def trash_list(db: Session, notebook_id: int | None = None,
+                         page: int = 1, page_size: int = 50) -> tuple[list[Note], int]:
+        """回收站列表（分页）"""
+        query = db.query(Note).filter(Note.deleted_at.isnot(None))
+        if notebook_id is not None:
+            query = query.filter(Note.notebook_id == notebook_id)
+        total = query.count()
+        notes = query.order_by(Note.deleted_at.desc()) \
+                     .offset((page - 1) * page_size) \
+                     .limit(page_size).all()
+        return notes, total
+
+    @staticmethod
+    async def restore(db: Session, note_id: int) -> Note | None:
+        """从回收站恢复笔记"""
+        note = db.query(Note).filter_by(id=note_id).filter(Note.deleted_at.isnot(None)).first()
+        if not note:
+            return None
+        note.deleted_at = None
+        note.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(note)
+        logger.info(f"Restored note: {note_id}")
+        # 恢复向量索引
+        if note.content and note.content.strip():
+            try:
+                await rag_engine.index_note(note.id, note.title, note.content)
+            except Exception as e:
+                logger.warning(f"恢复笔记 {note_id} 向量失败: {e}")
+        return note
+
+    @staticmethod
+    async def permanent_delete(db: Session, note_id: int) -> bool:
+        """永久删除笔记（不可恢复）"""
+        note = db.query(Note).filter_by(id=note_id).filter(Note.deleted_at.isnot(None)).first()
+        if not note:
+            return False
+        db.delete(note)
+        db.commit()
+        logger.info(f"Permanently deleted note: {note_id}")
+        try:
+            await rag_engine.remove_note(note_id)
+        except Exception as e:
+            logger.warning(f"清理笔记 {note_id} 向量失败: {e}")
+        return True
+
+    @staticmethod
+    async def empty_trash(db: Session, notebook_id: int | None = None) -> int:
+        """清空回收站，返回删除数量"""
+        query = db.query(Note).filter(Note.deleted_at.isnot(None))
+        if notebook_id is not None:
+            query = query.filter(Note.notebook_id == notebook_id)
+        count = query.count()
+        for note in query.all():
+            db.delete(note)
+            try:
+                await rag_engine.remove_note(note.id)
+            except Exception:
+                pass
+        db.commit()
+        logger.info(f"清空回收站: {count} 篇笔记")
+        return count
+
+    @staticmethod
+    async def delete_folder(db: Session, notebook_id: int, folder_path: str) -> int:
+        """软删除文件夹内所有笔记，返回删除数量"""
+        notes = db.query(Note).filter(
+            Note.notebook_id == notebook_id,
+            Note.deleted_at.is_(None),
+            (Note.folder == folder_path) | Note.folder.startswith(folder_path + "/"),
+        ).all()
+        now = datetime.now(timezone.utc)
+        for note in notes:
+            note.deleted_at = now
+            try:
+                await rag_engine.remove_note(note.id)
+            except Exception:
+                pass
+        db.commit()
+        logger.info(f"Soft-deleted folder '{folder_path}': {len(notes)} notes")
+        return len(notes)
+
+    @staticmethod
+    def count_folder_notes(db: Session, notebook_id: int, folder_path: str) -> int:
+        """统计文件夹内笔记数量（不含已删除）"""
+        return db.query(Note).filter(
+            Note.notebook_id == notebook_id,
+            Note.deleted_at.is_(None),
+            (Note.folder == folder_path) | Note.folder.startswith(folder_path + "/"),
+        ).count()
+
+    @staticmethod
     def get_by_id(db: Session, note_id: int) -> Note | None:
-        """获取单个笔记"""
+        """获取单个笔记（含已删除，回收站查看用）"""
         return db.query(Note).filter_by(id=note_id).first()
+
+    @staticmethod
+    def get_by_id_active(db: Session, note_id: int) -> Note | None:
+        """获取单个笔记（仅未删除）"""
+        return db.query(Note).filter_by(id=note_id).filter(Note.deleted_at.is_(None)).first()
 
     @staticmethod
     def list_notes(
@@ -140,7 +235,7 @@ class NoteService:
         Returns:
             (notes, total_count)
         """
-        query = db.query(Note)
+        query = db.query(Note).filter(Note.deleted_at.is_(None))
 
         # 笔记库筛选
         if notebook_id is not None:

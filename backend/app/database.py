@@ -46,6 +46,7 @@ def init_db():
     import app.models.notebook      # noqa: F401
     import app.models.note_link     # noqa: F401
     import app.models.quiz          # noqa: F401
+    import app.models.mastery       # noqa: F401
 
     # 确保数据目录存在
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -66,5 +67,11 @@ def init_db():
                 _logger.info("迁移: 添加 notes.notebook_id 列")
                 conn.exec_driver_sql(
                     "ALTER TABLE notes ADD COLUMN notebook_id INTEGER REFERENCES notebooks(id)"
+                )
+                conn.commit()
+            if "deleted_at" not in columns:
+                _logger.info("迁移: 添加 notes.deleted_at 列（软删除/回收站）")
+                conn.exec_driver_sql(
+                    "ALTER TABLE notes ADD COLUMN deleted_at TIMESTAMP"
                 )
                 conn.commit()

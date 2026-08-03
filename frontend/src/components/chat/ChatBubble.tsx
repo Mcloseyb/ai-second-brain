@@ -1,8 +1,11 @@
 /**
  * ChatBubble — 聊天气泡组件
  * -------------------------
- * 用户消息（右对齐，蓝色）+ AI 消息（左对齐，灰色）+ Markdown 渲染。
+ * 用户消息（右对齐，蓝色，纯文本）+ AI 消息（左对齐，灰色，Markdown 渲染）。
  */
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { User, Bot, Loader2 } from 'lucide-react'
@@ -34,18 +37,34 @@ export default function ChatBubble({ message, isGenerating }: ChatBubbleProps) {
             : 'bg-muted',
         )}
       >
-        <div className="text-sm whitespace-pre-wrap break-words">
-          {message.content || (isGenerating ? '' : ' ')}
-          {isGenerating && !message.content && (
-            <span className="inline-flex items-center gap-1 text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" />
-              思考中...
-            </span>
-          )}
-          {isGenerating && message.content && (
-            <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse align-middle" />
-          )}
-        </div>
+        {/* 用户消息：纯文本；AI 消息：Markdown 渲染 */}
+        {isUser ? (
+          <div className="text-sm whitespace-pre-wrap break-words">
+            {message.content || ' '}
+          </div>
+        ) : (
+          <div className="text-sm chat-markdown">
+            {message.content ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {message.content}
+              </ReactMarkdown>
+            ) : (
+              isGenerating ? null : <span> </span>
+            )}
+            {isGenerating && !message.content && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                思考中...
+              </span>
+            )}
+            {isGenerating && message.content && (
+              <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse align-middle" />
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
