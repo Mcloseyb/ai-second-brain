@@ -288,6 +288,18 @@ export const reviewApi = {
   streak: (notebookId: number) =>
     client.get('/api/review/streak', { params: { notebook_id: notebookId } }) as Promise<import('@/types').StreakInfo>,
 
+  /** 全局统计 */
+  stats: (notebookId: number) =>
+    client.get('/api/review/stats', { params: { notebook_id: notebookId } }) as Promise<import('@/types').ReviewStats>,
+
+  /** 错题列表 */
+  wrongQuestions: (notebookId: number, clusterId?: number | null) =>
+    client.get('/api/review/wrong-questions', { params: { notebook_id: notebookId, cluster_id: clusterId ?? undefined } }) as Promise<{ questions: import('@/types').WrongQuestion[] }>,
+
+  /** 标记错题已重温 */
+  markWrongReviewed: (ids: number[]) =>
+    client.post('/api/review/wrong-questions/reviewed', { ids }) as Promise<{ ok: boolean; marked: number }>,
+
   /** 知识点收藏列表 */
   bookmarks: (notebookId: number) =>
     client.get('/api/review/bookmarks', { params: { notebook_id: notebookId } }) as Promise<{ bookmarks: import('@/types').KnowledgeBookmark[] }>,

@@ -185,6 +185,47 @@ async def get_streak(
     return review_service.get_streak(db, notebook_id)
 
 
+# ── 统计 ───────────────────────────────────────────
+
+
+@router.get("/stats")
+async def get_stats(
+    notebook_id: int = Query(..., description="笔记库 ID"),
+    db: Session = Depends(get_db),
+):
+    """全局统计：掌握度分布 + 簇排行 + 最近复习量"""
+    return review_service.get_stats(db, notebook_id)
+
+
+# ── 错题重温 ────────────────────────────────────────
+
+
+class MarkReviewedRequest(BaseModel):
+    ids: list[int]
+
+
+@router.get("/wrong-questions")
+async def list_wrong_questions(
+    notebook_id: int = Query(..., description="笔记库 ID"),
+    cluster_id: int | None = Query(None, description="簇 ID，可选"),
+    db: Session = Depends(get_db),
+):
+    """未重温的错题列表"""
+    return {
+        "questions": review_service.get_wrong_questions(db, notebook_id, cluster_id)
+    }
+
+
+@router.post("/wrong-questions/reviewed")
+async def mark_wrong_reviewed(
+    req: MarkReviewedRequest,
+    db: Session = Depends(get_db),
+):
+    """标记错题已重温"""
+    count = review_service.mark_wrong_reviewed(db, req.ids)
+    return {"ok": True, "marked": count}
+
+
 # ── 知识点收藏 ──────────────────────────────────────
 
 

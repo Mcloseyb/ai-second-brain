@@ -230,6 +230,32 @@ export interface KnowledgeBookmark {
   created_at: string
 }
 
+// ---- Stats types ----
+
+export interface ReviewStats {
+  total_notes: number
+  by_mastery: { new: number; learning: number; young: number; mature: number }
+  recent_reviews_7d: number
+  clusters: Array<{ id: number; name: string; note_count: number; mastery: ClusterMastery; mastered_pct: number }>
+}
+
+// ---- Wrong question types ----
+
+export interface WrongQuestion {
+  id: number
+  notebook_id: number
+  note_id: number
+  cluster_id: number | null
+  question: string
+  options: string[]
+  answer: string
+  explanation: string
+  note_title: string
+  user_answer: string
+  reviewed: boolean
+  created_at: string
+}
+
 // ---- Sync types ----
 
 export interface SyncStatus {

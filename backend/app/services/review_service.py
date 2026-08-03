@@ -625,6 +625,30 @@ class ReviewService:
                 "mastery_after": new_level,
             })
 
+        # ── 保存错题 ──
+        from app.models.wrong_question import WrongQuestion
+        cn_map_wq: dict[int, int] = {}
+        all_nids_wq = list(note_stats.keys())
+        if all_nids_wq:
+            cns_wq = db.query(ClusterNote).filter(ClusterNote.note_id.in_(all_nids_wq)).all()
+            for cn in cns_wq:
+                if cn.note_id not in cn_map_wq:
+                    cn_map_wq[cn.note_id] = cn.cluster_id
+        questions_raw = json.loads(quiz.questions_json or "[]")
+        for r in results:
+            if not r["correct"]:
+                q_src = next((q for q in questions_raw if q.get("id") == r["question_id"]), None)
+                if q_src:
+                    wq = WrongQuestion(
+                        notebook_id=quiz.notebook_id,
+                        note_id=r.get("note_id") or 0,
+                        cluster_id=cn_map_wq.get(r.get("note_id")),
+                        quiz_id=quiz_id,
+                        question_json=json.dumps(q_src, ensure_ascii=False),
+                        user_answer=r["user_answer"],
+                    )
+                    db.add(wq)
+
         db.commit()
 
         # ── 更新打卡 ──
@@ -699,6 +723,80 @@ class ReviewService:
         if not streak:
             return {"current_streak": 0, "longest_streak": 0, "last_review_date": None}
         return streak.to_dict()
+
+    # ============================================================
+    # 统计
+    # ============================================================
+
+    def get_stats(self, db: Session, notebook_id: int) -> dict:
+        """聚合统计数据"""
+        states = (
+            db.query(NoteReviewState)
+            .join(Note, NoteReviewState.note_id == Note.id)
+            .filter(Note.notebook_id == notebook_id, Note.deleted_at.is_(None))
+            .all()
+        )
+        by_mastery = {"new": 0, "learning": 0, "young": 0, "mature": 0}
+        for s in states:
+            by_mastery[mastery_level(s)] += 1
+        total = sum(by_mastery.values())
+
+        # 最近 7 天复习量
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        recent_logs = (
+            db.query(ReviewLog)
+            .filter(ReviewLog.created_at >= week_ago)
+            .all()
+        )
+        reviewed_note_ids = set(log.note_id for log in recent_logs)
+        notes_in_nb = db.query(Note).filter(
+            Note.notebook_id == notebook_id, Note.deleted_at.is_(None)
+        ).all()
+        nb_note_ids = {n.id for n in notes_in_nb}
+        recent_review_count = len(reviewed_note_ids & nb_note_ids)
+
+        # 簇排行
+        clusters = db.query(ConceptCluster).filter_by(notebook_id=notebook_id).all()
+        cluster_list = []
+        for c in clusters:
+            m = self.cluster_mastery(db, c.id)
+            cluster_list.append({
+                "id": c.id, "name": c.name, "note_count": c.note_count,
+                "mastery": m,
+                "mastered_pct": round(((m["young"] + m["mature"]) / max(m["total"], 1)) * 100),
+            })
+        cluster_list.sort(key=lambda x: x["mastered_pct"])
+
+        return {
+            "total_notes": total,
+            "by_mastery": by_mastery,
+            "recent_reviews_7d": recent_review_count,
+            "clusters": cluster_list,
+        }
+
+    # ============================================================
+    # 错题管理
+    # ============================================================
+
+    def get_wrong_questions(self, db: Session, notebook_id: int,
+                            cluster_id: int | None = None,
+                            limit: int = 50) -> list[dict]:
+        """获取未重温的错题"""
+        from app.models.wrong_question import WrongQuestion
+        q = db.query(WrongQuestion).filter_by(notebook_id=notebook_id, reviewed=False)
+        if cluster_id is not None:
+            q = q.filter_by(cluster_id=cluster_id)
+        wqs = q.order_by(WrongQuestion.created_at.desc()).limit(limit).all()
+        return [wq.to_dict() for wq in wqs]
+
+    def mark_wrong_reviewed(self, db: Session, ids: list[int]) -> int:
+        """标记错题已重温"""
+        from app.models.wrong_question import WrongQuestion
+        count = db.query(WrongQuestion).filter(WrongQuestion.id.in_(ids)).update(
+            {"reviewed": True}, synchronize_session=False
+        )
+        db.commit()
+        return count
 
     # ============================================================
     # 自由出题（不计入 SM-2）

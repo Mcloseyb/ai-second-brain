@@ -51,6 +51,7 @@ def init_db():
     import app.models.review        # noqa: F401
     import app.models.streak        # noqa: F401
     import app.models.bookmark      # noqa: F401
+    import app.models.wrong_question  # noqa: F401
 
     # 确保数据目录存在
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)

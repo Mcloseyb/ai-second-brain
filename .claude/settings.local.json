@@ -67,7 +67,8 @@
       "Bash(.venv/Scripts/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000)",
       "Bash(.venv/Scripts/python desktop/main.py --no-backend)",
       "Bash(echo \"Desktop started \\(PID: $!\\)\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\(f'total={d[\\\\\"total_notes\\\\\"]}, mastery={d[\\\\\"by_mastery\\\\\"]}, recent={d[\\\\\"recent_reviews_7d\\\\\"]}, clusters={len\\(d[\\\\\"clusters\\\\\"]\\)}'\\)\")"
     ]
   }
 }
