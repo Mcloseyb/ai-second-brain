@@ -272,7 +272,7 @@ class ClusterService:
         return {
             "clusters": [
                 {"id": c["db_id"], "name": name_map.get(c["db_id"], ""),
-                 "note_count": cluster_notes_map[c["cluster_id"]]}
+                 "note_count": len(cluster_notes_map[c["cluster_id"]])}
                 for c in clusters_info
             ],
             "note_count": len(note_ids),

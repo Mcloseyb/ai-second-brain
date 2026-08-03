@@ -73,6 +73,10 @@ export default function ReviewPage() {
   const [dayPopoverDate, setDayPopoverDate] = useState<string | null>(null)
   const [dayLoading, setDayLoading] = useState(false)
 
+  // 错误提示
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const showError = (msg: string) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(null), 4000) }
+
   // ── 加载数据 ───────────────────────────────────
 
   const loadData = useCallback(async () => {
@@ -87,8 +91,8 @@ export default function ReviewPage() {
       setClusters(cRes.clusters || [])
       setDueData(dRes)
       setStreak(sRes)
-    } catch (e) {
-      console.error('加载复习数据失败:', e)
+    } catch (e: any) {
+      showError('加载失败: ' + (e?.message || '网络错误'))
     } finally {
       setLoading(false)
     }
@@ -103,21 +107,28 @@ export default function ReviewPage() {
     try {
       const detail = await reviewApi.clusterDetail(clusterId)
       setClusterDetail(detail)
-    } catch (e) {
-      console.error('加载簇详情失败:', e)
+    } catch (e: any) {
+      showError('加载簇详情失败: ' + (e?.message || '网络错误'))
     }
   }
 
   // ── 重聚类 ─────────────────────────────────────
 
   const handleRecluster = async () => {
-    if (!activeNotebookId || reclustering) return
+    if (!activeNotebookId) {
+      showError('请先在笔记页选择一个笔记库')
+      return
+    }
+    if (reclustering) return
     setReclustering(true)
+    setErrorMsg(null)
     try {
       await reviewApi.recluster(activeNotebookId)
       await loadData()
-    } catch (e) {
-      console.error('重聚类失败:', e)
+      setSelectedClusterId(null)
+      setClusterDetail(null)
+    } catch (e: any) {
+      showError('重聚类失败: ' + (e?.message || '网络错误'))
     } finally {
       setReclustering(false)
     }
@@ -284,13 +295,21 @@ export default function ReviewPage() {
           <Button variant="outline" size="sm" className="w-full text-xs h-7"
             onClick={handleRecluster} disabled={reclustering}>
             <RefreshCw className={`size-3 mr-1 ${reclustering ? 'animate-spin' : ''}`} />
-            重聚类
+            {reclustering ? '聚类中...' : '重聚类'}
           </Button>
         </div>
       </aside>
 
       {/* ========== 右侧内容区 ========== */}
       <main className="flex-1 flex flex-col min-w-0">
+        {/* 错误提示 */}
+        {errorMsg && (
+          <div className="mx-2 mt-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-400 flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>{errorMsg}</span>
+            <button className="ml-auto shrink-0 hover:opacity-70" onClick={() => setErrorMsg(null)}>✕</button>
+          </div>
+        )}
         <ScrollArea className="flex-1">
           {hasQuiz ? (
             /* ─── 测验界面 ─── */
