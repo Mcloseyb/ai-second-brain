@@ -47,6 +47,9 @@ def init_db():
     import app.models.note_link     # noqa: F401
     import app.models.quiz          # noqa: F401
     import app.models.mastery       # noqa: F401
+    import app.models.cluster       # noqa: F401
+    import app.models.review        # noqa: F401
+    import app.models.streak        # noqa: F401
 
     # 确保数据目录存在
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,5 +76,14 @@ def init_db():
                 _logger.info("迁移: 添加 notes.deleted_at 列（软删除/回收站）")
                 conn.exec_driver_sql(
                     "ALTER TABLE notes ADD COLUMN deleted_at TIMESTAMP"
+                )
+                conn.commit()
+            # 给 review_logs 加 rating 列
+            result = conn.exec_driver_sql("PRAGMA table_info('review_logs')")
+            rl_columns = {row[1] for row in result}
+            if "rating" not in rl_columns:
+                _logger.info("迁移: 添加 review_logs.rating 列")
+                conn.exec_driver_sql(
+                    "ALTER TABLE review_logs ADD COLUMN rating VARCHAR(10)"
                 )
                 conn.commit()

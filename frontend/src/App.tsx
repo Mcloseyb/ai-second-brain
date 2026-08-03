@@ -17,8 +17,6 @@ import {
   Brain,
   NotebookPen,
   MessageSquare,
-  GraduationCap,
-  LayoutDashboard,
   Trash2,
   Sun,
   Moon,
@@ -33,9 +31,7 @@ import { cn } from '@/lib/utils'
 const navItems = [
   { icon: NotebookPen, title: '智能笔记', path: '/notes' },
   { icon: MessageSquare, title: '知识问答', path: '/chat' },
-  { icon: GraduationCap, title: '出题自测', path: '/quiz' },
-  { icon: Brain, title: '知识进阶', path: '/mastery' },
-  { icon: LayoutDashboard, title: '数据看板', path: '/dashboard' },
+  { icon: Brain, title: '温故知新', path: '/review' },
 ]
 
 export default function App() {
@@ -78,7 +74,7 @@ export default function App() {
           </div>
           {!collapsed && (
             <div className="flex flex-col gap-0.5 leading-none min-w-0">
-              <span className="font-semibold text-sm truncate">AI Second Brain</span>
+              <span className="font-semibold text-sm truncate">学迹 LearnTrace</span>
               <span className="text-[10px] text-muted-foreground">个人知识库</span>
             </div>
           )}

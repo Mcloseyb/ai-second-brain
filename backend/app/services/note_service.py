@@ -61,6 +61,15 @@ class NoteService:
             except Exception as e:
                 logger.warning(f"笔记 {note.id} 自动同步向量库失败: {e}")
 
+        # S1: 创建初始 SM-2 复习状态 + 尝试归簇
+        try:
+            from app.services.review_service import review_service
+            from app.services.cluster_service import cluster_service
+            review_service.ensure_review_state(db, note.id)
+            cluster_service.assign_note_to_cluster(db, note.id)
+        except Exception as e:
+            logger.warning(f"笔记 {note.id} 复习状态/归簇初始化失败: {e}")
+
         return note
 
     @staticmethod

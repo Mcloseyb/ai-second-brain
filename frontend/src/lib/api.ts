@@ -33,10 +33,6 @@ import type {
   QuizGenerateResponse,
   QuizGradeResponse,
   QuizAttempt,
-  DashboardStatsResponse,
-  GraphResponse,
-  GraphCluster,
-  ClusterNamesResponse,
 } from '@/types'
 
 // 后端固定地址
@@ -157,25 +153,6 @@ export const notebooksApi = {
 }
 
 // ============================================================
-// 数据看板（P7）
-// ============================================================
-export const dashboardApi = {
-  /** 统计概览 */
-  stats: () => client.get('/api/dashboard/stats') as Promise<DashboardStatsResponse>,
-
-  /**
-   * 知识图谱（云朵语义聚类，不画内部连线）
-   * threshold = 强关联阈值；clusters = 分簇数（默认按笔记数）
-   */
-  graph: (params: { notebook_id?: number | null; threshold?: number; clusters?: number } = {}) =>
-    client.get('/api/dashboard/graph', { params }) as Promise<GraphResponse>,
-
-  /** Agent 给每个簇（云朵）生成语义名称（LLM 总结簇内内容） */
-  clusterNames: (clusters: GraphCluster[]) =>
-    client.post('/api/dashboard/cluster-names', { clusters }) as Promise<ClusterNamesResponse>,
-}
-
-// ============================================================
 // 出题自测（P6）
 // ============================================================
 export const quizApi = {
@@ -280,18 +257,50 @@ export const syncApi = {
 }
 
 // ============================================================
-// 掌握度评估（S1 知识进阶）
+// 温故知新 — 聚类 / 复习 / 出题 / 打卡 / 日历
 // ============================================================
-export const masteryApi = {
-  /** 概念掌握度列表 */
-  concepts: (notebookId: number) =>
-    client.get('/api/mastery/concepts', { params: { notebook_id: notebookId } }) as Promise<import('@/types').ConceptsListResponse>,
+export const reviewApi = {
+  /** 簇列表（含掌握度统计） */
+  clusters: (notebookId: number) =>
+    client.get('/api/review/clusters', { params: { notebook_id: notebookId } }) as Promise<{ clusters: import('@/types').ClusterInfo[] }>,
 
-  /** 单个概念详情 */
-  conceptDetail: (name: string, notebookId: number) =>
-    client.get(`/api/mastery/concepts/${encodeURIComponent(name)}`, { params: { notebook_id: notebookId } }) as Promise<{ concept: import('@/types').ConceptMastery }>,
+  /** 簇详情（含 SM-2 状态 + 掌握度） */
+  clusterDetail: (clusterId: number) =>
+    client.get(`/api/review/clusters/${clusterId}`) as Promise<import('@/types').ClusterDetail>,
 
-  /** 评估历史 */
-  sessions: (notebookId: number, concept?: string, limit = 20) =>
-    client.get('/api/mastery/sessions', { params: { notebook_id: notebookId, concept, limit } }) as Promise<import('@/types').SessionsListResponse>,
+  /** 全量重聚类 */
+  recluster: (notebookId: number) =>
+    client.post(`/api/review/clusters/recluster?notebook_id=${notebookId}`) as Promise<any>,
+
+  /** 今日到期 */
+  due: (notebookId: number) =>
+    client.get('/api/review/due', { params: { notebook_id: notebookId } }) as Promise<import('@/types').DueReviewsResponse>,
+
+  /** 生成复习测验 — scope: due|all|errors|new */
+  generate: (clusterId: number, scope: string = 'due', count: number = 10) =>
+    client.post('/api/review/generate', { cluster_id: clusterId, scope, count }) as Promise<import('@/types').ReviewGenerateResponse>,
+
+  /** 批改复习测验 — 可选 ratings */
+  grade: (quizId: number, answers: import('@/types').QuizAttempt[], ratings?: Array<{ note_id: number; rating: string }>) =>
+    client.post('/api/review/grade', { quiz_id: quizId, answers, ratings }) as Promise<import('@/types').ReviewGradeResponse>,
+
+  /** 打卡状态 */
+  streak: (notebookId: number) =>
+    client.get('/api/review/streak', { params: { notebook_id: notebookId } }) as Promise<import('@/types').StreakInfo>,
+
+  /** 复习日历（月） */
+  calendar: (notebookId: number, year: number, month: number) =>
+    client.get('/api/review/calendar', { params: { notebook_id: notebookId, year, month } }) as Promise<{ days: Array<{ date: string; count: number; score_avg: number }>; total_reviews: number; total_questions: number }>,
+
+  /** 日历某天详情 */
+  calendarDay: (notebookId: number, date: string) =>
+    client.get('/api/review/calendar/day', { params: { notebook_id: notebookId, date } }) as Promise<import('@/types').CalendarDayDetail>,
+
+  /** 自由出题 */
+  freeGenerate: (notebookId: number, clusterId: number | null, count: number) =>
+    client.post('/api/review/free-generate', { notebook_id: notebookId, cluster_id: clusterId, count }) as Promise<import('@/types').ReviewGenerateResponse>,
+
+  /** 自由出题批改 */
+  freeGrade: (quizId: number, answers: import('@/types').QuizAttempt[]) =>
+    client.post('/api/review/free-grade', { quiz_id: quizId, answers }) as Promise<import('@/types').ReviewGradeResponse>,
 }

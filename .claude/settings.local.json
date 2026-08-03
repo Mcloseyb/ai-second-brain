@@ -53,7 +53,21 @@
       "Bash(C:/Users/HP/AppData/Local/Programs/Python/Python312/python.exe -c \"import sys; sys.path.insert\\(0, 'backend'\\); import app.models.mastery; import app.services.mastery_service; import app.agents.mastery_agent; import app.api.mastery; print\\('OK - all imports successful'\\)\")",
       "Bash(git *)",
       "Bash(H:/agent/.venv/Scripts/python.exe *)",
-      "Bash(claude plugins *)"
+      "Bash(claude plugins *)",
+      "Bash(.venv/Scripts/python -c \"from app.services.cluster_service import cluster_service; from app.services.review_service import review_service; from app.api.review import router; print\\('All imports OK'\\)\")",
+      "Bash(../.venv/Scripts/python -c \"from app.services.cluster_service import cluster_service; from app.services.review_service import review_service; from app.api.review import router; print\\('All imports OK'\\)\")",
+      "Bash(timeout 5 ../.venv/Scripts/python -c ' *)",
+      "Bash(../.venv/Scripts/python -c ' *)",
+      "Bash(../.venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)[:500]\\)\")",
+      "Bash(python -m json.tool)",
+      "Bash(taskkill //PID 22484 //F)",
+      "Bash(taskkill *)",
+      "Bash(.venv/Scripts/python desktop/main.py)",
+      "Bash(.venv/Scripts/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000)",
+      "Bash(.venv/Scripts/python desktop/main.py --no-backend)",
+      "Bash(echo \"Desktop started \\(PID: $!\\)\")",
+      "WebSearch"
     ]
   }
 }

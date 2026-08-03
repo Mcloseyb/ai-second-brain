@@ -198,8 +198,7 @@ from app.api.documents import router as documents_router
 from app.api.sync import router as sync_router
 from app.api.notebooks import router as notebooks_router
 from app.api.quiz import router as quiz_router
-from app.api.dashboard import router as dashboard_router
-from app.api.mastery import router as mastery_router
+from app.api.review import router as review_router
 
 app.include_router(chat_router)
 app.include_router(notes_router)
@@ -208,8 +207,7 @@ app.include_router(documents_router)
 app.include_router(sync_router)
 app.include_router(notebooks_router)
 app.include_router(quiz_router)
-app.include_router(dashboard_router)
-app.include_router(mastery_router)
+app.include_router(review_router)
 
 
 # ============================================================

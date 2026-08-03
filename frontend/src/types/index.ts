@@ -95,48 +95,145 @@ export type SSEEvent =
   | { type: 'done'; message_id: number; tokens: number }
   | { type: 'error'; content: string }
 
-// ---- Mastery types (S1 知识进阶) ----
+// ---- Review types (温故知新) ----
 
-export interface ConceptMastery {
+export interface ClusterInfo {
   id: number
-  concept_name: string
   notebook_id: number
-  mastery_score: number
-  assessment_count: number
-  last_assessed_at: string | null
-  strengths: string[]
-  weaknesses: string[]
+  name: string
+  note_count: number
+  mastery?: ClusterMastery
   created_at: string
   updated_at: string
-  sessions?: MasterySessionItem[]
-  score_history?: Array<{ date: string | null; score: number | null }>
 }
 
-export interface MasterySessionItem {
+export interface ClusterMastery {
+  new: number
+  learning: number
+  young: number
+  mature: number
+  total: number
+}
+
+export interface ClusterDetail extends ClusterInfo {
+  notes: Array<{
+    id: number
+    title: string
+    sm2?: NoteSM2State | null
+    mastery: 'new' | 'learning' | 'young' | 'mature'
+  }>
+}
+
+export interface NoteSM2State {
   id: number
-  concept_name: string
-  notebook_id: number
-  message_count: number
-  final_score: number | null
-  summary: string | null
+  note_id: number
+  ease_factor: number
+  interval_days: number
+  repetitions: number
+  next_review_at: string | null
+  last_review_at: string | null
   created_at: string | null
+  updated_at: string | null
 }
 
-export type MasterySSEEvent =
-  | { type: 'status'; content: string }
-  | { type: 'token'; content: string }
-  | { type: 'score'; session_id: number; score: number; strengths: string[]; weaknesses: string[]; summary: string }
-  | { type: 'done'; session_id: number }
-  | { type: 'error'; content: string }
-
-export interface ConceptsListResponse {
-  concepts: ConceptMastery[]
-  total: number
+export interface DueNoteItem {
+  note_id: number
+  note_title: string
+  mastery: string
+  state: {
+    id: number
+    note_id: number
+    ease_factor: number
+    interval_days: number
+    repetitions: number
+    next_review_at: string | null
+    last_review_at: string | null
+  }
 }
 
-export interface SessionsListResponse {
-  sessions: MasterySessionItem[]
+export interface DueClusterGroup {
+  cluster_id: number
+  cluster_name: string
+  note_count: number
+  due_count: number
+  notes: DueNoteItem[]
+}
+
+export interface DueReviewsResponse {
+  clusters: DueClusterGroup[]
+  orphans: DueNoteItem[]
+  total_due: number
+}
+
+export interface ReviewQuizQuestion {
+  id: string
+  type: 'choice'
+  question: string
+  options: string[]
+  note_id?: number
+  note_title?: string
+}
+
+export interface ReviewGenerateResponse {
+  quiz_id: number
+  note_count: number
+  questions: ReviewQuizQuestion[]
+}
+
+export interface ReviewGradeResult {
+  question_id: string
+  correct: boolean
+  user_answer: string
+  answer: string
+  explanation: string
+  note_id?: number
+  note_title?: string
+}
+
+export interface UpdatedState {
+  note_id: number
+  correct: string
+  rating: string
+  old_interval: number
+  new_interval: number
+  next_review_at: string | null
+  mastery_before: string
+  mastery_after: string
+}
+
+export interface ReviewGradeResponse {
   total: number
+  correct: number
+  score: number
+  summary: string
+  results: ReviewGradeResult[]
+  updated_states?: UpdatedState[]
+}
+
+// ---- Streak types ----
+
+export interface StreakInfo {
+  current_streak: number
+  longest_streak: number
+  last_review_date: string | null
+}
+
+// ---- Calendar day detail ----
+
+export interface CalendarDayReview {
+  note_id: number
+  note_title: string
+  cluster_name: string
+  correct: string
+  rating: string
+}
+
+export interface CalendarDayDetail {
+  date: string
+  reviews: CalendarDayReview[]
+  total_questions: number
+  correct_count: number
+  score: number
 }
 
 // ---- Sync types ----

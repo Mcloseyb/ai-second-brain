@@ -10,7 +10,7 @@
  *   }
  */
 import { BASE_URL } from './api'
-import type { SSEEvent, MasterySSEEvent } from '@/types'
+import type { SSEEvent } from '@/types'
 
 export async function* chatStream(
   message: string,
@@ -45,54 +45,6 @@ export async function* chatStream(
         yield JSON.parse(dataStr) as SSEEvent
       } catch {
         // 跳过无法解析的行
-      }
-    }
-  }
-}
-
-/**
- * 掌握度评估 SSE 流式（S1 知识进阶）
- */
-export async function* masteryAssessStream(
-  concept: string,
-  notebookId: number,
-  sessionId: number | null = null,
-  message: string | null = null,
-): AsyncGenerator<MasterySSEEvent> {
-  const response = await fetch(`${BASE_URL}/api/mastery/assess`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      concept,
-      notebook_id: notebookId,
-      session_id: sessionId,
-      message,
-    }),
-  })
-
-  if (!response.ok) throw new Error(`请求失败: ${response.status}`)
-
-  const reader = response.body!.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed.startsWith('data:')) continue
-      const dataStr = trimmed.slice(5).trim()
-      if (!dataStr) continue
-      try {
-        yield JSON.parse(dataStr) as MasterySSEEvent
-      } catch {
-        // skip
       }
     }
   }
