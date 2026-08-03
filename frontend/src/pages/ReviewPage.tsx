@@ -7,10 +7,10 @@
 import { useEffect, useState, useCallback, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useNotesStore } from '@/stores/notes'
-import { reviewApi } from '@/lib/api'
+import { reviewApi, notebooksApi } from '@/lib/api'
 import type {
   ClusterInfo, ClusterDetail, DueReviewsResponse, ReviewGenerateResponse,
-  ReviewGradeResponse, QuizAttempt, StreakInfo, CalendarDayDetail,
+  ReviewGradeResponse, QuizAttempt, StreakInfo, CalendarDayDetail, Notebook,
 } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +46,8 @@ export default function ReviewPage() {
   const activeNotebookId = useNotesStore((s) => s.activeNotebookId)
 
   // 数据状态
+  const [notebooks, setNotebooks] = useState<Notebook[]>([])
+  const [selectedNbId, setSelectedNbId] = useState<number | null>(null)
   const [clusters, setClusters] = useState<ClusterInfo[]>([])
   const [dueData, setDueData] = useState<DueReviewsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -77,16 +79,30 @@ export default function ReviewPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const showError = (msg: string) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(null), 4000) }
 
+  // ── 初始化：加载笔记本列表 ─────────────────────
+
+  useEffect(() => {
+    notebooksApi.list().then(res => {
+      const nbs = res.notebooks || []
+      setNotebooks(nbs)
+      // 优先用 store 里已选中的，否则用第一个
+      const storeId = useNotesStore.getState().activeNotebookId
+      const targetId = storeId ?? (nbs.length > 0 ? nbs[0].id : null)
+      if (targetId && targetId !== selectedNbId) {
+        setSelectedNbId(targetId)
+      }
+    }).catch(e => showError('加载知识库列表失败: ' + (e?.message || '')))
+  }, [])
+
   // ── 加载数据 ───────────────────────────────────
 
-  const loadData = useCallback(async () => {
-    if (!activeNotebookId) return
+  const loadReviewData = useCallback(async (nbId: number) => {
     setLoading(true)
     try {
       const [cRes, dRes, sRes] = await Promise.all([
-        reviewApi.clusters(activeNotebookId),
-        reviewApi.due(activeNotebookId),
-        reviewApi.streak(activeNotebookId),
+        reviewApi.clusters(nbId),
+        reviewApi.due(nbId),
+        reviewApi.streak(nbId),
       ])
       setClusters(cRes.clusters || [])
       setDueData(dRes)
@@ -96,9 +112,21 @@ export default function ReviewPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeNotebookId])
+  }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    if (selectedNbId) loadReviewData(selectedNbId)
+  }, [selectedNbId, loadReviewData])
+
+  // ── 切换知识库 ─────────────────────────────────
+
+  const switchNotebook = (nbId: number) => {
+    setSelectedNbId(nbId)
+    setSelectedClusterId(null)
+    setClusterDetail(null)
+    // 同步到 store
+    useNotesStore.getState().setActiveNotebook(nbId)
+  }
 
   // ── 选中簇 ─────────────────────────────────────
 
@@ -115,16 +143,16 @@ export default function ReviewPage() {
   // ── 重聚类 ─────────────────────────────────────
 
   const handleRecluster = async () => {
-    if (!activeNotebookId) {
-      showError('请先在笔记页选择一个笔记库')
+    if (!selectedNbId) {
+      showError('请先选择知识库')
       return
     }
     if (reclustering) return
     setReclustering(true)
     setErrorMsg(null)
     try {
-      await reviewApi.recluster(activeNotebookId)
-      await loadData()
+      await reviewApi.recluster(selectedNbId)
+      await loadReviewData(selectedNbId)
       setSelectedClusterId(null)
       setClusterDetail(null)
     } catch (e: any) {
@@ -185,7 +213,7 @@ export default function ReviewPage() {
       setGrade(res)
       setRatingsSubmitted(true)
       // 刷新数据和打卡
-      await loadData()
+      if (selectedNbId) await loadReviewData(selectedNbId)
     } catch (e) {
       console.error('提交评分失败:', e)
     }
@@ -200,13 +228,13 @@ export default function ReviewPage() {
     setGrade(null)
     setNoteRatings({})
     setRatingsSubmitted(false)
-    loadData()
+    if (selectedNbId) loadReviewData(selectedNbId)
   }
 
   // ── 日历点击 ───────────────────────────────────
 
   const handleDayClick = async (dateStr: string) => {
-    if (!activeNotebookId) return
+    if (!selectedNbId) return
     if (dayPopoverDate === dateStr) {
       setDayPopoverDate(null)
       setDayDetail(null)
@@ -215,7 +243,7 @@ export default function ReviewPage() {
     setDayPopoverDate(dateStr)
     setDayLoading(true)
     try {
-      const detail = await reviewApi.calendarDay(activeNotebookId, dateStr)
+      const detail = await reviewApi.calendarDay(selectedNbId, dateStr)
       setDayDetail(detail)
     } catch (e) {
       console.error('加载日历详情失败:', e)
@@ -302,9 +330,32 @@ export default function ReviewPage() {
 
       {/* ========== 右侧内容区 ========== */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* 错误提示 */}
+        {/* 知识库选择器 + 错误提示 */}
+        <div className="px-1 pt-2 pb-1 flex items-center gap-2 flex-wrap">
+          <label className="text-xs text-muted-foreground shrink-0">知识库:</label>
+          <select
+            className="border rounded-md px-2 py-1 text-xs bg-background max-w-[180px]"
+            value={selectedNbId ?? ''}
+            onChange={(e) => {
+              const id = Number(e.target.value)
+              if (id) switchNotebook(id)
+            }}
+          >
+            {notebooks.length === 0 && (
+              <option value="">无可用知识库</option>
+            )}
+            {notebooks.map((nb) => (
+              <option key={nb.id} value={nb.id}>{nb.name}</option>
+            ))}
+          </select>
+          {selectedNbId && notebooks.length > 0 && (
+            <span className="text-[10px] text-muted-foreground">
+              ({notebooks.find(n => n.id === selectedNbId)?.note_count || 0} 篇笔记)
+            </span>
+          )}
+        </div>
         {errorMsg && (
-          <div className="mx-2 mt-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-400 flex items-center gap-2">
+          <div className="mx-1 mb-1 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-400 flex items-center gap-2">
             <AlertCircle className="size-4 shrink-0" />
             <span>{errorMsg}</span>
             <button className="ml-auto shrink-0 hover:opacity-70" onClick={() => setErrorMsg(null)}>✕</button>
@@ -334,7 +385,7 @@ export default function ReviewPage() {
               {/* 🔥 打卡 + 📅 迷你日历 */}
               <TopBar
                 streak={streak}
-                notebookId={activeNotebookId}
+                notebookId={selectedNbId}
                 onDayClick={handleDayClick}
                 dayPopoverDate={dayPopoverDate}
                 dayDetail={dayDetail}
