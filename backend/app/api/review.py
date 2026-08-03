@@ -185,34 +185,66 @@ async def get_streak(
     return review_service.get_streak(db, notebook_id)
 
 
-# ── 日历 ───────────────────────────────────────────
+# ── 知识点收藏 ──────────────────────────────────────
 
 
-@router.get("/calendar")
-async def review_calendar(
+class BookmarkCreate(BaseModel):
+    notebook_id: int
+    note_id: int
+    question: str
+    explanation: str = ""
+    cluster_id: int | None = None
+
+
+@router.get("/bookmarks")
+async def list_bookmarks(
     notebook_id: int = Query(..., description="笔记库 ID"),
-    year: int = Query(..., description="年份"),
-    month: int = Query(..., ge=1, le=12, description="月份"),
     db: Session = Depends(get_db),
 ):
-    """月度复习热力图"""
-    return review_service.get_calendar(db, notebook_id, year, month)
+    """知识点收藏列表"""
+    from app.models.bookmark import KnowledgeBookmark
+    bookmarks = (
+        db.query(KnowledgeBookmark)
+        .filter_by(notebook_id=notebook_id)
+        .order_by(KnowledgeBookmark.created_at.desc())
+        .all()
+    )
+    return {"bookmarks": [b.to_dict() for b in bookmarks]}
 
 
-@router.get("/calendar/day")
-async def calendar_day_detail(
-    notebook_id: int = Query(..., description="笔记库 ID"),
-    date: str = Query(..., description="日期 YYYY-MM-DD"),
+@router.post("/bookmarks")
+async def create_bookmark(
+    req: BookmarkCreate,
     db: Session = Depends(get_db),
 ):
-    """某一天的复习详情"""
-    try:
-        return review_service.get_day_detail(db, notebook_id, date)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"获取日历详情失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    """收藏知识点"""
+    from app.models.bookmark import KnowledgeBookmark
+    bm = KnowledgeBookmark(
+        notebook_id=req.notebook_id,
+        note_id=req.note_id,
+        cluster_id=req.cluster_id,
+        question=req.question,
+        explanation=req.explanation,
+    )
+    db.add(bm)
+    db.commit()
+    db.refresh(bm)
+    return {"bookmark": bm.to_dict()}
+
+
+@router.delete("/bookmarks/{bookmark_id}")
+async def delete_bookmark(
+    bookmark_id: int,
+    db: Session = Depends(get_db),
+):
+    """取消收藏"""
+    from app.models.bookmark import KnowledgeBookmark
+    bm = db.query(KnowledgeBookmark).filter_by(id=bookmark_id).first()
+    if not bm:
+        raise HTTPException(status_code=404, detail="收藏不存在")
+    db.delete(bm)
+    db.commit()
+    return {"ok": True}
 
 
 # ── 自由出题（不计入 SM-2） ────────────────────────

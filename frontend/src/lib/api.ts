@@ -288,13 +288,17 @@ export const reviewApi = {
   streak: (notebookId: number) =>
     client.get('/api/review/streak', { params: { notebook_id: notebookId } }) as Promise<import('@/types').StreakInfo>,
 
-  /** 复习日历（月） */
-  calendar: (notebookId: number, year: number, month: number) =>
-    client.get('/api/review/calendar', { params: { notebook_id: notebookId, year, month } }) as Promise<{ days: Array<{ date: string; count: number; score_avg: number }>; total_reviews: number; total_questions: number }>,
+  /** 知识点收藏列表 */
+  bookmarks: (notebookId: number) =>
+    client.get('/api/review/bookmarks', { params: { notebook_id: notebookId } }) as Promise<{ bookmarks: import('@/types').KnowledgeBookmark[] }>,
 
-  /** 日历某天详情 */
-  calendarDay: (notebookId: number, date: string) =>
-    client.get('/api/review/calendar/day', { params: { notebook_id: notebookId, date } }) as Promise<import('@/types').CalendarDayDetail>,
+  /** 收藏知识点 */
+  addBookmark: (data: { notebook_id: number; note_id: number; question: string; explanation: string; cluster_id?: number | null }) =>
+    client.post('/api/review/bookmarks', data) as Promise<{ bookmark: import('@/types').KnowledgeBookmark }>,
+
+  /** 取消收藏 */
+  removeBookmark: (bookmarkId: number) =>
+    client.delete(`/api/review/bookmarks/${bookmarkId}`) as Promise<{ ok: boolean }>,
 
   /** 自由出题 */
   freeGenerate: (notebookId: number, clusterId: number | null, count: number) =>

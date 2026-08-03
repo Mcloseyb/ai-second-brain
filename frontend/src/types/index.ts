@@ -218,22 +218,16 @@ export interface StreakInfo {
   last_review_date: string | null
 }
 
-// ---- Calendar day detail ----
+// ---- Bookmark types ----
 
-export interface CalendarDayReview {
+export interface KnowledgeBookmark {
+  id: number
+  notebook_id: number
   note_id: number
-  note_title: string
-  cluster_name: string
-  correct: string
-  rating: string
-}
-
-export interface CalendarDayDetail {
-  date: string
-  reviews: CalendarDayReview[]
-  total_questions: number
-  correct_count: number
-  score: number
+  cluster_id: number | null
+  question: string
+  explanation: string
+  created_at: string
 }
 
 // ---- Sync types ----
