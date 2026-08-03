@@ -108,6 +108,18 @@ async def cluster_detail(
     return detail
 
 
+# ── 复习：到期查询 ──────────────────────────────────
+
+
+@router.get("/due")
+async def due_reviews(
+    notebook_id: int = Query(..., description="笔记库 ID"),
+    db: Session = Depends(get_db),
+):
+    """今日到期笔记列表（按簇分组）"""
+    return review_service.get_due_reviews(db, notebook_id)
+
+
 # ── 复习：出题 ──────────────────────────────────────
 
 
